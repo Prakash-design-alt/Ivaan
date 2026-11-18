@@ -21,7 +21,7 @@
 
   #login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 20px; }
   #login p { opacity: .8; max-width: 360px; }
-  #login[hidden], #app[hidden] { display: none; }
+  #login[hidden], #app[hidden], #connectBtn[hidden] { display: none; }
 
   #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
             align-items: center; justify-content: center; z-index: 10; touch-action: none; overflow: hidden; }
@@ -61,6 +61,7 @@
   <header>
     <input type="file" id="fileInput" accept="image/*" multiple>
     <button id="uploadBtn">Upload</button>
+    <button id="connectBtn" hidden>Connect Drive</button>
     <span id="status"></span>
     <button id="signOutBtn">Sign out</button>
   </header>
@@ -88,11 +89,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-         collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { getStorage, ref, uploadBytes, getDownloadURL }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
 
 // ---- Configuration ----
 
@@ -106,111 +102,163 @@ const firebaseConfig = {
   measurementId: "G-663KYFE147"
 };
 
-// Keep this list in sync with firestore.rules and storage.rules
+// Google Drive folder "Ivaan Memories"
+const FOLDER_ID = '1Jup9dXbKyytJbHl8pLis6kZBK-tOTS6Y';
+
 const ALLOWED_EMAILS = [
   '1.prakashbudhathoki@gmail.com',
   'prakashbudhathoki3333@gmail.com',
   'kawarlila26@gmail.com'
 ];
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const THUMB_SIZE = 400;
+const THUMB_PX = 400;
+const FULL_CACHE_MAX = 20;   // full-size pictures kept in memory
 const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
 
-// ---- Firebase setup ----
+// ---- Firebase (sign-in only) ----
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
-const storage = getStorage(app);
+const provider = new GoogleAuthProvider();
+provider.addScope('https://www.googleapis.com/auth/drive');
 
 // ---- Elements ----
 
 const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginMsg = $('loginMsg');
 const gallery = $('gallery'), statusEl = $('status');
+const connectBtn = $('connectBtn');
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn');
 const zoomLabel = $('zoomLabel');
 
 function setStatus(t) { statusEl.textContent = t; }
+const isAllowed = user => ALLOWED_EMAILS.includes((user?.email || '').toLowerCase());
 
-// ---- Auth ----
+// ---- Sign-in and Drive connection ----
 
-$('signInBtn').onclick = () => {
-  loginMsg.textContent = '';
-  signInWithPopup(auth, new GoogleAuthProvider()).catch(e => {
-    loginMsg.textContent = 'Sign-in failed: ' + e.message;
-  });
-};
-
-$('signOutBtn').onclick = () => signOut(auth);
-
-onAuthStateChanged(auth, user => {
-  const email = (user?.email || '').toLowerCase();
-  if (!user) {
-    appEl.hidden = true;
-    loginEl.hidden = false;
-    stopListening();
-    return;
-  }
-  if (!ALLOWED_EMAILS.includes(email)) {
-    signOut(auth);
-    loginEl.hidden = false;
-    loginMsg.textContent = 'This account is not on the allowed list.';
-    return;
-  }
-  loginEl.hidden = true;
-  appEl.hidden = false;
-  startListening();
-});
-
-// ---- Photo list (live from Firestore) ----
-
+let accessToken = null;
 let photos = [];
-let unsubscribe = null;
 let currentIndex = -1;
 let viewToken = 0;
 
-function startListening() {
-  if (unsubscribe) return;
-  setStatus('Loading...');
-  const q = query(collection(db, 'photos'), orderBy('name'));
-  unsubscribe = onSnapshot(q, snap => {
-    photos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderGrid();
-  }, e => setStatus('Error: ' + e.message));
+// Opens the Google sign-in popup and keeps the Drive access token it returns
+async function connectDrive() {
+  const result = await signInWithPopup(auth, provider);
+  if (!isAllowed(result.user)) {
+    await signOut(auth);
+    throw new Error('This account is not on the allowed list.');
+  }
+  const cred = GoogleAuthProvider.credentialFromResult(result);
+  accessToken = cred.accessToken;
+  return result.user;
 }
 
-function stopListening() {
-  if (unsubscribe) unsubscribe();
-  unsubscribe = null;
+$('signInBtn').onclick = () => {
+  loginMsg.textContent = '';
+  connectDrive()
+    .then(() => { showApp(); refresh(); })
+    .catch(e => { loginMsg.textContent = 'Sign-in failed: ' + e.message; });
+};
+
+connectBtn.onclick = () => {
+  connectDrive()
+    .then(() => { showConnected(true); refresh(); })
+    .catch(e => setStatus(e.message));
+};
+
+$('signOutBtn').onclick = async () => {
+  accessToken = null;
   photos = [];
   gallery.innerHTML = '';
-}
+  await signOut(auth);
+};
 
-// Download URLs are cached per path so each file is requested only once
-const urlCache = new Map();
-function urlFor(path) {
-  if (!urlCache.has(path)) {
-    const p = getDownloadURL(ref(storage, path)).catch(e => {
-      urlCache.delete(path);
-      throw e;
-    });
-    urlCache.set(path, p);
+// On page load, a signed-in user keeps their session but needs one click to reconnect Drive
+onAuthStateChanged(auth, user => {
+  if (user && isAllowed(user)) {
+    showApp();
+    showConnected(false);
+    setStatus('Click Connect Drive to load pictures');
+  } else {
+    if (user) signOut(auth);
+    appEl.hidden = true;
+    loginEl.hidden = false;
   }
-  return urlCache.get(path);
+});
+
+function showApp() { loginEl.hidden = true; appEl.hidden = false; }
+
+function showConnected(connected) {
+  connectBtn.hidden = connected;
 }
 
-// Thumbnails load only when their card scrolls into view
+// Every Drive request goes through here, so an expired token is caught in one place
+async function driFetch(url, opts = {}) {
+  if (!accessToken) throw new Error('Drive not connected. Click Connect Drive.');
+  const res = await fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + accessToken }
+  });
+  if (res.status === 401) {
+    accessToken = null;
+    showConnected(false);
+    throw new Error('Drive session expired. Click Connect Drive.');
+  }
+  if (!res.ok) throw new Error('Drive error ' + res.status);
+  return res;
+}
+
+// ---- Listing and thumbnails ----
+
+async function listFolder() {
+  const files = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({
+      q: `'${FOLDER_ID}' in parents and mimeType contains 'image/' and trashed = false`,
+      fields: 'nextPageToken,files(id,name,mimeType,thumbnailLink)',
+      pageSize: '1000',
+      orderBy: 'name'
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const data = await (await driFetch('https://www.googleapis.com/drive/v3/files?' + params)).json();
+    files.push(...(data.files || []));
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return files;
+}
+
+async function refresh() {
+  if (!accessToken) return;
+  setStatus('Loading pictures...');
+  try {
+    photos = await listFolder();
+    renderGrid();
+  } catch (e) {
+    setStatus(e.message);
+  }
+}
+
+// Thumbnails are fetched with the token and turned into local URLs, because <img> can't send the header
+const thumbCache = new Map();
+function thumbUrl(p) {
+  if (!thumbCache.has(p.id)) {
+    const size = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
+    const pr = driFetch(size).then(r => r.blob()).then(b => URL.createObjectURL(b));
+    pr.catch(() => thumbCache.delete(p.id));
+    thumbCache.set(p.id, pr);
+  }
+  return thumbCache.get(p.id);
+}
+
 const io = new IntersectionObserver(entries => {
   entries.forEach(en => {
     if (!en.isIntersecting) return;
     io.unobserve(en.target);
-    const path = en.target.dataset.path;
-    urlFor(path).then(url => { en.target.querySelector('img').src = url; }).catch(() => {});
+    const p = photos.find(x => x.id === en.target.dataset.id);
+    if (!p || !p.thumbnailLink) return;
+    thumbUrl(p).then(url => { en.target.querySelector('img').src = url; }).catch(() => {});
   });
 }, { rootMargin: '300px' });
 
@@ -220,7 +268,7 @@ function renderGrid() {
   photos.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.dataset.path = p.thumbPath || p.fullPath;
+    card.dataset.id = p.id;
     card.innerHTML = '<img alt="" loading="lazy"><span></span>';
     card.querySelector('span').textContent = p.name;
     card.onclick = () => openImage(i);
@@ -230,45 +278,51 @@ function renderGrid() {
   setStatus(photos.length + ' pictures');
 }
 
-// ---- Upload ----
+// ---- Full-size pictures ----
 
-// Creates a small JPEG preview in the browser, so no server-side processing is needed
-function makeThumb(file) {
-  return new Promise((resolve, reject) => {
-    const src = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, THUMB_SIZE / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(src);
-      c.toBlob(b => b ? resolve(b) : reject(new Error('Thumbnail failed')), 'image/jpeg', 0.8);
-    };
-    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('Cannot read image')); };
-    img.src = src;
-  });
+const fullCache = new Map();
+function fullUrl(id) {
+  if (!fullCache.has(id)) {
+    const pr = driFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`)
+      .then(r => r.blob()).then(b => URL.createObjectURL(b));
+    pr.catch(() => fullCache.delete(id));
+    fullCache.set(id, pr);
+    // Drop the oldest full-size picture when the cache gets too large
+    if (fullCache.size > FULL_CACHE_MAX) {
+      const oldest = fullCache.keys().next().value;
+      fullCache.get(oldest).then(u => URL.revokeObjectURL(u)).catch(() => {});
+      fullCache.delete(oldest);
+    }
+  }
+  return fullCache.get(id);
+}
+
+// ---- Upload to the Drive folder ----
+
+function buildMultipart(meta, file) {
+  const boundary = 'gallery' + Date.now();
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
+    `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
+    file,
+    `\r\n--${boundary}--`
+  ], { type: 'multipart/related; boundary=' + boundary });
+  return body;
 }
 
 $('uploadBtn').onclick = async () => {
   const files = [...$('fileInput').files];
   if (!files.length) { setStatus('Choose pictures first'); return; }
+  if (!accessToken) { setStatus('Click Connect Drive first'); return; }
+
   let done = 0;
   for (const f of files) {
-    if (f.size > MAX_UPLOAD_BYTES) { setStatus('Skipped ' + f.name + ' (over 10 MB)'); continue; }
     setStatus('Uploading ' + f.name + ' (' + (done + 1) + ' of ' + files.length + ')');
     try {
-      const id = crypto.randomUUID();
-      const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
-      const fullPath = `photos/${id}.${ext}`;
-      const thumbPath = `thumbs/${id}.jpg`;
-      const thumb = await makeThumb(f);
-
-      await uploadBytes(ref(storage, fullPath), f, { contentType: f.type || 'image/jpeg' });
-      await uploadBytes(ref(storage, thumbPath), thumb, { contentType: 'image/jpeg' });
-      await setDoc(doc(db, 'photos', id), {
-        name: f.name, fullPath, thumbPath, createdAt: serverTimestamp()
+      await driFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/related' },
+        body: buildMultipart({ name: f.name, parents: [FOLDER_ID] }, f)
       });
       done++;
     } catch (e) {
@@ -277,7 +331,8 @@ $('uploadBtn').onclick = async () => {
     }
   }
   $('fileInput').value = '';
-  setStatus('Uploaded ' + done + ' of ' + files.length);
+  setStatus('Uploaded ' + done + ' of ' + files.length + ', refreshing...');
+  await refresh();
 };
 
 // ---- Zoom and pan ----
@@ -369,12 +424,12 @@ async function openImage(index) {
   prevBtn.disabled = nextBtn.disabled = total < 2;
 
   try {
-    const url = await urlFor(p.fullPath);
+    const url = await fullUrl(p.id);
     if (token !== viewToken) return;
     viewerImg.src = url;
   } catch (e) {
     if (token !== viewToken) return;
-    counterEl.textContent = 'Could not open ' + p.name;
+    counterEl.textContent = 'Could not open ' + p.name + ' (' + e.message + ')';
   } finally {
     if (token === viewToken) viewerImg.classList.remove('loading');
   }
@@ -382,8 +437,7 @@ async function openImage(index) {
   // Preload neighbors so arrow navigation feels instant
   if (total > 1) {
     [index + 1, index - 1].forEach(j => {
-      const q = photos[wrap(j, total)];
-      urlFor(q.fullPath).then(u => { new Image().src = u; }).catch(() => {});
+      fullUrl(photos[wrap(j, total)].id).catch(() => {});
     });
   }
 }
