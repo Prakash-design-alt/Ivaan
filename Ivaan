@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive Picture Gallery</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px;
+           align-items: center; padding: 12px 16px; background: #1c1c1c; }
+  button { padding: 8px 14px; border: none; border-radius: 6px; background: #3b82f6; color: #fff; cursor: pointer; }
+  button:hover { background: #2563eb; }
+  button:disabled { opacity: .4; cursor: default; background: #3b82f6; }
+  #status { font-size: 14px; opacity: .8; }
+  #signOutBtn { margin-left: auto; background: #444; }
+  #signOutBtn:hover { background: #555; }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; padding: 16px; }
+  .card { background: #222; border-radius: 8px; overflow: hidden; cursor: pointer; }
+  .card img { width: 100%; height: 240px; object-fit: contain; display: block; background: #333; }
+  .card span { display: block; padding: 6px 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  #login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 20px; }
+  #login p { opacity: .8; max-width: 360px; }
+  #login[hidden], #app[hidden] { display: none; }
+
+  #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
+            align-items: center; justify-content: center; z-index: 10; touch-action: none; overflow: hidden; }
+  #viewer.show { display: flex; }
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+           overflow: hidden; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #viewerImg { max-width: 90vw; max-height: 88vh; border-radius: 4px; transition: opacity .15s, transform .15s;
+               transform-origin: center center; user-select: none; -webkit-user-drag: none; }
+  #viewerImg.loading { opacity: .35; }
+  #viewerImg.no-anim { transition: none; }
+  #closeBtn { position: absolute; top: 12px; right: 16px; background: none; font-size: 32px; color: #fff; padding: 0 8px; z-index: 2; }
+  #closeBtn:hover { background: none; color: #ccc; }
+  .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.5);
+         color: #fff; font-size: 36px; line-height: 1; padding: 10px 16px; border-radius: 8px; z-index: 2; }
+  .nav:hover { background: rgba(0,0,0,.8); }
+  #prevBtn { left: 12px; }
+  #nextBtn { right: 12px; }
+  #counter { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+             font-size: 14px; color: #ddd; background: rgba(0,0,0,.5); padding: 4px 10px; border-radius: 6px; z-index: 2; }
+  #zoomBar { position: absolute; bottom: 14px; right: 16px; display: flex; gap: 6px; align-items: center; z-index: 2; }
+  #zoomBar button { padding: 6px 12px; font-size: 18px; line-height: 1; background: rgba(0,0,0,.6); }
+  #zoomBar button:hover { background: rgba(0,0,0,.85); }
+  #zoomLabel { font-size: 13px; color: #ddd; background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 6px; min-width: 52px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <h2>Drive Picture Gallery</h2>
+  <p>Sign in with an approved Google account to see the pictures.</p>
+  <button id="signInBtn">Sign in with Google</button>
+  <p id="loginMsg"></p>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+    <button id="uploadBtn">Upload</button>
+    <span id="status"></span>
+    <button id="signOutBtn">Sign out</button>
+  </header>
+
+  <main id="gallery"></main>
+
+  <div id="viewer">
+    <div id="stage">
+      <img id="viewerImg" alt="" draggable="false">
+    </div>
+    <button id="closeBtn" aria-label="Close">&times;</button>
+    <button id="prevBtn" class="nav" aria-label="Previous">&#8249;</button>
+    <button id="nextBtn" class="nav" aria-label="Next">&#8250;</button>
+    <div id="counter"></div>
+    <div id="zoomBar">
+      <button id="zoomOutBtn" aria-label="Zoom out">&minus;</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomInBtn" aria-label="Zoom in">+</button>
+      <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+         collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+
+// ---- Configuration ----
+
+const firebaseConfig = {
+  apiKey: "AIzaSyC9kKK-0fz0M8zlSR-B3tetAhND8o_6O0A",
+  authDomain: "family-5b997.firebaseapp.com",
+  projectId: "family-5b997",
+  storageBucket: "family-5b997.firebasestorage.app",
+  messagingSenderId: "795538288432",
+  appId: "1:795538288432:web:02c8b617421743a866e2f5",
+  measurementId: "G-663KYFE147"
+};
+
+// Keep this list in sync with firestore.rules and storage.rules
+const ALLOWED_EMAILS = [
+  '1.prakashbudhathoki@gmail.com',
+  'prakashbudhathoki3333@gmail.com',
+  'kawarlila26@gmail.com'
+];
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const THUMB_SIZE = 400;
+const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
+
+// ---- Firebase setup ----
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+const storage = getStorage(app);
+
+// ---- Elements ----
+
+const $ = id => document.getElementById(id);
+const loginEl = $('login'), appEl = $('app'), loginMsg = $('loginMsg');
+const gallery = $('gallery'), statusEl = $('status');
+const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
+const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn');
+const zoomLabel = $('zoomLabel');
+
+function setStatus(t) { statusEl.textContent = t; }
+
+// ---- Auth ----
+
+$('signInBtn').onclick = () => {
+  loginMsg.textContent = '';
+  signInWithPopup(auth, new GoogleAuthProvider()).catch(e => {
+    loginMsg.textContent = 'Sign-in failed: ' + e.message;
+  });
+};
+
+$('signOutBtn').onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  const email = (user?.email || '').toLowerCase();
+  if (!user) {
+    appEl.hidden = true;
+    loginEl.hidden = false;
+    stopListening();
+    return;
+  }
+  if (!ALLOWED_EMAILS.includes(email)) {
+    signOut(auth);
+    loginEl.hidden = false;
+    loginMsg.textContent = 'This account is not on the allowed list.';
+    return;
+  }
+  loginEl.hidden = true;
+  appEl.hidden = false;
+  startListening();
+});
+
+// ---- Photo list (live from Firestore) ----
+
+let photos = [];           // { id, name, fullPath, thumbPath }
+let unsubscribe = null;
+let currentIndex = -1;
+let viewToken = 0;
+
+function startListening() {
+  if (unsubscribe) return;
+  setStatus('Loading...');
+  const q = query(collection(db, 'photos'), orderBy('name'));
+  unsubscribe = onSnapshot(q, snap => {
+    photos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderGrid();
+  }, e => setStatus('Error: ' + e.message));
+}
+
+function stopListening() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = null;
+  photos = [];
+  gallery.innerHTML = '';
+}
+
+// Download URLs are cached per path so each file is requested only once
+const urlCache = new Map();
+function urlFor(path) {
+  if (!urlCache.has(path)) {
+    const p = getDownloadURL(ref(storage, path)).catch(e => {
+      urlCache.delete(path);
+      throw e;
+    });
+    urlCache.set(path, p);
+  }
+  return urlCache.get(path);
+}
+
+// Thumbnails load only when their card scrolls into view
+const io = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    io.unobserve(en.target);
+    const path = en.target.dataset.path;
+    urlFor(path).then(url => { en.target.querySelector('img').src = url; }).catch(() => {});
+  });
+}, { rootMargin: '300px' });
+
+function renderGrid() {
+  io.disconnect();
+  gallery.innerHTML = '';
+  photos.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.path = p.thumbPath || p.fullPath;
+    card.innerHTML = '<img alt="" loading="lazy"><span></span>';
+    card.querySelector('span').textContent = p.name;
+    card.onclick = () => openImage(i);
+    gallery.appendChild(card);
+    io.observe(card);
+  });
+  setStatus(photos.length + ' pictures');
+}
+
+// ---- Upload ----
+
+// Creates a small JPEG preview in the browser, so no server-side processing is needed
+function makeThumb(file) {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, THUMB_SIZE / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(src);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('Thumbnail failed')), 'image/jpeg', 0.8);
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error('Cannot read image')); };
+    img.src = src;
+  });
+}
+
+$('uploadBtn').onclick = async () => {
+  const files = [...$('fileInput').files];
+  if (!files.length) { setStatus('Choose pictures first'); return; }
+  let done = 0;
+  for (const f of files) {
+    if (f.size > MAX_UPLOAD_BYTES) { setStatus('Skipped ' + f.name + ' (over 10 MB)'); continue; }
+    setStatus('Uploading ' + f.name + ' (' + (done + 1) + ' of ' + files.length + ')');
+    try {
+      const id = crypto.randomUUID();
+      const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
+      const fullPath = `photos/${id}.${ext}`;
+      const thumbPath = `thumbs/${id}.jpg`;
+      const thumb = await makeThumb(f);
+
+      await uploadBytes(ref(storage, fullPath), f, { contentType: f.type || 'image/jpeg' });
+      await uploadBytes(ref(storage, thumbPath), thumb, { contentType: 'image/jpeg' });
+      await setDoc(doc(db, 'photos', id), {
+        name: f.name, fullPath, thumbPath, createdAt: serverTimestamp()
+      });
+      done++;
+    } catch (e) {
+      setStatus('Failed: ' + f.name + ' (' + e.message + ')');
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  $('fileInput').value = '';
+  setStatus('Uploaded ' + done + ' of ' + files.length);
+};
+
+// ---- Zoom and pan ----
+
+let zoom = 1, panX = 0, panY = 0;
+
+function clampPan() {
+  const rect = viewerImg.getBoundingClientRect();
+  const baseW = rect.width / zoom, baseH = rect.height / zoom;
+  const maxX = Math.max(0, (baseW * zoom - stage.clientWidth) / 2);
+  const maxY = Math.max(0, (baseH * zoom - stage.clientHeight) / 2);
+  panX = Math.min(maxX, Math.max(-maxX, panX));
+  panY = Math.min(maxY, Math.max(-maxY, panY));
+}
+
+function applyTransform(animate = true) {
+  clampPan();
+  viewerImg.classList.toggle('no-anim', !animate);
+  viewerImg.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  zoomLabel.textContent = Math.round(zoom * 100) + '%';
+  stage.style.cursor = zoom > 1 ? 'grab' : 'default';
+}
+
+function setZoom(z, animate = true) {
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+  if (zoom === MIN_ZOOM) { panX = 0; panY = 0; }
+  applyTransform(animate);
+}
+
+function resetZoom() {
+  zoom = 1; panX = 0; panY = 0;
+  applyTransform(true);
+}
+
+$('zoomInBtn').onclick = e => { e.stopPropagation(); setZoom(zoom + ZOOM_STEP); };
+$('zoomOutBtn').onclick = e => { e.stopPropagation(); setZoom(zoom - ZOOM_STEP); };
+$('zoomResetBtn').onclick = e => { e.stopPropagation(); resetZoom(); };
+
+stage.addEventListener('wheel', e => {
+  if (!viewer.classList.contains('show')) return;
+  e.preventDefault();
+  setZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+}, { passive: false });
+
+let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
+
+stage.addEventListener('mousedown', e => {
+  if (zoom <= 1) return;
+  dragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  panStartX = panX; panStartY = panY;
+  stage.classList.add('dragging');
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  panX = panStartX + (e.clientX - dragStartX);
+  panY = panStartY + (e.clientY - dragStartY);
+  applyTransform(false);
+});
+
+window.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  stage.classList.remove('dragging');
+});
+
+stage.addEventListener('dblclick', () => {
+  if (zoom > 1) resetZoom(); else setZoom(2.5);
+});
+
+// ---- Viewer ----
+
+const wrap = (i, total) => ((i % total) + total) % total;
+
+async function openImage(index) {
+  const total = photos.length;
+  if (!total) return;
+  index = wrap(index, total);
+  currentIndex = index;
+  const token = ++viewToken;
+  const p = photos[index];
+
+  viewer.classList.add('show');
+  viewerImg.classList.add('loading');
+  resetZoom();
+  counterEl.textContent = (index + 1) + ' / ' + total + '  ·  ' + p.name;
+  prevBtn.disabled = nextBtn.disabled = total < 2;
+
+  try {
+    const url = await urlFor(p.fullPath);
+    if (token !== viewToken) return;
+    viewerImg.src = url;
+  } catch (e) {
+    if (token !== viewToken) return;
+    counterEl.textContent = 'Could not open ' + p.name;
+  } finally {
+    if (token === viewToken) viewerImg.classList.remove('loading');
+  }
+
+  // Preload neighbors so arrow navigation feels instant
+  if (total > 1) {
+    [index + 1, index - 1].forEach(j => {
+      const q = photos[wrap(j, total)];
+      urlFor(q.fullPath).then(u => { new Image().src = u; }).catch(() => {});
+    });
+  }
+}
+
+const showNext = () => { if (currentIndex !== -1) openImage(currentIndex + 1); };
+const showPrev = () => { if (currentIndex !== -1) openImage(currentIndex - 1); };
+
+function closeViewer() {
+  viewToken++;
+  dragging = false;
+  viewer.classList.remove('show');
+  viewerImg.removeAttribute('src');
+  currentIndex = -1;
+  resetZoom();
+}
+
+$('closeBtn').onclick = closeViewer;
+prevBtn.onclick = e => { e.stopPropagation(); showPrev(); };
+nextBtn.onclick = e => { e.stopPropagation(); showNext(); };
+viewer.onclick = e => { if (e.target === viewer || e.target === stage) closeViewer(); };
+
+document.addEventListener('keydown', e => {
+  if (!viewer.classList.contains('show')) return;
+  if (e.key === 'ArrowRight') showNext();
+  else if (e.key === 'ArrowLeft') showPrev();
+  else if (e.key === 'Escape') closeViewer();
+  else if (e.key === '+' || e.key === '=') setZoom(zoom + ZOOM_STEP);
+  else if (e.key === '-') setZoom(zoom - ZOOM_STEP);
+  else if (e.key === '0') resetZoom();
+});
+
+// Touch: swipe to change pictures at normal zoom, one-finger drag to pan when zoomed
+let touchStartX = null, touchStartY = null, touchPanStartX = 0, touchPanStartY = 0;
+
+stage.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchPanStartX = panX; touchPanStartY = panY;
+}, { passive: true });
+
+stage.addEventListener('touchmove', e => {
+  if (zoom <= 1 || e.touches.length !== 1 || touchStartX === null) return;
+  e.preventDefault();
+  panX = touchPanStartX + (e.touches[0].clientX - touchStartX);
+  panY = touchPanStartY + (e.touches[0].clientY - touchStartY);
+  applyTransform(false);
+}, { passive: false });
+
+stage.addEventListener('touchend', e => {
+  if (touchStartX === null) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  touchStartX = null;
+  if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNext() : showPrev();
+});
+</script>
+</body>
+</html>
