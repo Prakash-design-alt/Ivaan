@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Drive Picture Gallery</title>
+<title>Family Picture Gallery</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; }
   header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px;
@@ -51,7 +51,7 @@
 <body>
 
 <div id="login" hidden>
-  <h2>Drive Picture Gallery</h2>
+  <h2>Family Picture Gallery</h2>
   <p>Sign in with an approved Google account to see the pictures.</p>
   <button id="signInBtn">Sign in with Google</button>
   <p id="loginMsg"></p>
@@ -169,7 +169,7 @@ onAuthStateChanged(auth, user => {
 
 // ---- Photo list (live from Firestore) ----
 
-let photos = [];           // { id, name, fullPath, thumbPath }
+let photos = [];
 let unsubscribe = null;
 let currentIndex = -1;
 let viewToken = 0;
