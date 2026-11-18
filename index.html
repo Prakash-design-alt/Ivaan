@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Family Picture Gallery</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; }
   header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px;
@@ -18,10 +19,7 @@
   .card { background: #222; border-radius: 8px; overflow: hidden; cursor: pointer; }
   .card img { width: 100%; height: 240px; object-fit: contain; display: block; background: #333; }
   .card span { display: block; padding: 6px 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  #login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; padding: 20px; }
-  #login p { opacity: .8; max-width: 360px; }
-  #login[hidden], #app[hidden], #connectBtn[hidden] { display: none; }
+  #connectBtn[hidden] { display: none; }
 
   #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
             align-items: center; justify-content: center; z-index: 10; touch-action: none; overflow: hidden; }
@@ -50,57 +48,37 @@
 </head>
 <body>
 
-<div id="login" hidden>
-  <h2>Family Picture Gallery</h2>
-  <p>Sign in with an approved Google account to see the pictures.</p>
-  <button id="signInBtn">Sign in with Google</button>
-  <p id="loginMsg"></p>
-</div>
+<header>
+  <input type="file" id="fileInput" accept="image/*" multiple>
+  <button id="uploadBtn">Upload</button>
+  <button id="connectBtn" hidden>Connect Drive</button>
+  <span id="status">Connecting...</span>
+  <button id="signOutBtn">Sign out</button>
+</header>
 
-<div id="app" hidden>
-  <header>
-    <input type="file" id="fileInput" accept="image/*" multiple>
-    <button id="uploadBtn">Upload</button>
-    <button id="connectBtn" hidden>Connect Drive</button>
-    <span id="status"></span>
-    <button id="signOutBtn">Sign out</button>
-  </header>
+<main id="gallery"></main>
 
-  <main id="gallery"></main>
-
-  <div id="viewer">
-    <div id="stage">
-      <img id="viewerImg" alt="" draggable="false">
-    </div>
-    <button id="closeBtn" aria-label="Close">&times;</button>
-    <button id="prevBtn" class="nav" aria-label="Previous">&#8249;</button>
-    <button id="nextBtn" class="nav" aria-label="Next">&#8250;</button>
-    <div id="counter"></div>
-    <div id="zoomBar">
-      <button id="zoomOutBtn" aria-label="Zoom out">&minus;</button>
-      <span id="zoomLabel">100%</span>
-      <button id="zoomInBtn" aria-label="Zoom in">+</button>
-      <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
-    </div>
+<div id="viewer">
+  <div id="stage">
+    <img id="viewerImg" alt="" draggable="false">
+  </div>
+  <button id="closeBtn" aria-label="Close">&times;</button>
+  <button id="prevBtn" class="nav" aria-label="Previous">&#8249;</button>
+  <button id="nextBtn" class="nav" aria-label="Next">&#8250;</button>
+  <div id="counter"></div>
+  <div id="zoomBar">
+    <button id="zoomOutBtn" aria-label="Zoom out">&minus;</button>
+    <span id="zoomLabel">100%</span>
+    <button id="zoomInBtn" aria-label="Zoom in">+</button>
+    <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
-  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-
+<script>
 // ---- Configuration ----
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC9kKK-0fz0M8zlSR-B3tetAhND8o_6O0A",
-  authDomain: "family-5b997.firebaseapp.com",
-  projectId: "family-5b997",
-  storageBucket: "family-5b997.firebasestorage.app",
-  messagingSenderId: "795538288432",
-  appId: "1:795538288432:web:02c8b617421743a866e2f5",
-  measurementId: "G-663KYFE147"
-};
+// OAuth Web client ID from Google Cloud → Credentials (see setup steps)
+const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
 
 // Google Drive folder "Ivaan Memories"
 const FOLDER_ID = '1Jup9dXbKyytJbHl8pLis6kZBK-tOTS6Y';
@@ -111,105 +89,145 @@ const ALLOWED_EMAILS = [
   'kawarlila26@gmail.com'
 ];
 
+const SCOPES = 'openid email https://www.googleapis.com/auth/drive';
+const TOKEN_KEY = 'gallery_token';
 const THUMB_PX = 400;
-const FULL_CACHE_MAX = 20;   // full-size pictures kept in memory
+const MAX_PARALLEL_THUMBS = 6;
+const FULL_CACHE_MAX = 20;
 const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
-
-// ---- Firebase (sign-in only) ----
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-provider.addScope('https://www.googleapis.com/auth/drive');
 
 // ---- Elements ----
 
 const $ = id => document.getElementById(id);
-const loginEl = $('login'), appEl = $('app'), loginMsg = $('loginMsg');
-const gallery = $('gallery'), statusEl = $('status');
-const connectBtn = $('connectBtn');
+const gallery = $('gallery'), statusEl = $('status'), connectBtn = $('connectBtn');
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn');
 const zoomLabel = $('zoomLabel');
 
 function setStatus(t) { statusEl.textContent = t; }
-const isAllowed = user => ALLOWED_EMAILS.includes((user?.email || '').toLowerCase());
 
-// ---- Sign-in and Drive connection ----
+// ---- Connection (Google Identity Services) ----
 
+let tokenClient = null;
 let accessToken = null;
+let pendingResolve = null, pendingReject = null;
 let photos = [];
 let currentIndex = -1;
 let viewToken = 0;
 
-// Opens the Google sign-in popup and keeps the Drive access token it returns
-async function connectDrive() {
-  const result = await signInWithPopup(auth, provider);
-  if (!isAllowed(result.user)) {
-    await signOut(auth);
-    throw new Error('This account is not on the allowed list.');
+function onTokenResponse(resp) {
+  if (pendingResolve) {
+    if (resp.error) pendingReject(new Error(resp.error));
+    else pendingResolve(resp);
+    pendingResolve = pendingReject = null;
   }
-  const cred = GoogleAuthProvider.credentialFromResult(result);
-  accessToken = cred.accessToken;
-  return result.user;
 }
 
-$('signInBtn').onclick = () => {
-  loginMsg.textContent = '';
-  connectDrive()
-    .then(() => { showApp(); refresh(); })
-    .catch(e => { loginMsg.textContent = 'Sign-in failed: ' + e.message; });
-};
+// Asks Google for a token. prompt '' tries silently first; 'consent' shows the approval popup
+function requestToken(prompt) {
+  return new Promise((resolve, reject) => {
+    pendingResolve = resolve;
+    pendingReject = reject;
+    tokenClient.requestAccessToken({ prompt });
+  });
+}
+
+function saveToken(token, email, expiresIn) {
+  try {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({
+      token, email, exp: Date.now() + expiresIn * 1000
+    }));
+  } catch (e) {}
+}
+
+function loadSavedToken() {
+  try {
+    const s = JSON.parse(localStorage.getItem(TOKEN_KEY));
+    if (s && s.exp - Date.now() > 60 * 1000) return s;
+  } catch (e) {}
+  return null;
+}
+
+// Gets a token, checks the email against the allowed list, and saves the session
+async function connectDrive(prompt) {
+  const resp = await requestToken(prompt);
+  accessToken = resp.access_token;
+  const info = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  })).json();
+  const email = (info.email || '').toLowerCase();
+  if (!ALLOWED_EMAILS.includes(email)) {
+    accessToken = null;
+    localStorage.removeItem(TOKEN_KEY);
+    throw new Error('This account is not on the allowed list.');
+  }
+  saveToken(accessToken, email, resp.expires_in || 3600);
+  connectBtn.hidden = true;
+}
+
+function startApp() {
+  const saved = loadSavedToken();
+  if (saved && ALLOWED_EMAILS.includes(saved.email)) {
+    accessToken = saved.token;
+    connectBtn.hidden = true;
+    refresh();
+    return;
+  }
+  // No valid saved session: try to reconnect silently, otherwise show the button
+  connectDrive('').then(refresh).catch(() => {
+    connectBtn.hidden = false;
+    setStatus('Click Connect Drive to load pictures');
+  });
+}
+
+function initGoogle() {
+  if (!(window.google && google.accounts && google.accounts.oauth2)) {
+    setTimeout(initGoogle, 100);
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: onTokenResponse,
+    error_callback: err => onTokenResponse({ error: err.type || 'cancelled' })
+  });
+  startApp();
+}
 
 connectBtn.onclick = () => {
-  connectDrive()
-    .then(() => { showConnected(true); refresh(); })
+  setStatus('Connecting...');
+  connectDrive('consent')
+    .then(refresh)
     .catch(e => setStatus(e.message));
 };
 
-$('signOutBtn').onclick = async () => {
+$('signOutBtn').onclick = () => {
+  if (accessToken && google.accounts.oauth2) google.accounts.oauth2.revoke(accessToken);
   accessToken = null;
+  localStorage.removeItem(TOKEN_KEY);
   photos = [];
   gallery.innerHTML = '';
-  await signOut(auth);
+  connectBtn.hidden = false;
+  setStatus('Signed out. Click Connect Drive to sign in again.');
 };
 
-// On page load, a signed-in user keeps their session but needs one click to reconnect Drive
-onAuthStateChanged(auth, user => {
-  if (user && isAllowed(user)) {
-    showApp();
-    showConnected(false);
-    setStatus('Click Connect Drive to load pictures');
-  } else {
-    if (user) signOut(auth);
-    appEl.hidden = true;
-    loginEl.hidden = false;
-  }
-});
-
-function showApp() { loginEl.hidden = true; appEl.hidden = false; }
-
-function showConnected(connected) {
-  connectBtn.hidden = connected;
-}
-
-// Every Drive request goes through here, so an expired token is caught in one place
-async function driFetch(url, opts = {}) {
-  if (!accessToken) throw new Error('Drive not connected. Click Connect Drive.');
+// Call Drive. If the token expired, reconnect once and retry
+async function driFetch(url, opts = {}, retry = true) {
+  if (!accessToken) throw new Error('Drive not connected');
   const res = await fetch(url, {
     ...opts,
     headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + accessToken }
   });
-  if (res.status === 401) {
-    accessToken = null;
-    showConnected(false);
-    throw new Error('Drive session expired. Click Connect Drive.');
+  if (res.status === 401 && retry) {
+    localStorage.removeItem(TOKEN_KEY);
+    await connectDrive('');
+    return driFetch(url, opts, false);
   }
   if (!res.ok) throw new Error('Drive error ' + res.status);
   return res;
 }
 
-// ---- Listing and thumbnails ----
+// ---- Listing ----
 
 async function listFolder() {
   const files = [];
@@ -230,22 +248,40 @@ async function listFolder() {
 }
 
 async function refresh() {
-  if (!accessToken) return;
   setStatus('Loading pictures...');
   try {
     photos = await listFolder();
     renderGrid();
   } catch (e) {
-    setStatus(e.message);
+    setStatus('Error: ' + e.message);
   }
 }
 
-// Thumbnails are fetched with the token and turned into local URLs, because <img> can't send the header
+// ---- Thumbnails: loaded as cards scroll into view, a few at a time ----
+
+const queue = [];
+let activeJobs = 0;
+
+function enqueue(job) {
+  queue.push(job);
+  pump();
+}
+
+function pump() {
+  while (activeJobs < MAX_PARALLEL_THUMBS && queue.length) {
+    const job = queue.shift();
+    activeJobs++;
+    job().catch(() => {}).finally(() => { activeJobs--; pump(); });
+  }
+}
+
 const thumbCache = new Map();
 function thumbUrl(p) {
   if (!thumbCache.has(p.id)) {
-    const size = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
-    const pr = driFetch(size).then(r => r.blob()).then(b => URL.createObjectURL(b));
+    const src = p.thumbnailLink
+      ? p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX
+      : `https://www.googleapis.com/drive/v3/files/${p.id}?alt=media`;
+    const pr = driFetch(src).then(r => r.blob()).then(b => URL.createObjectURL(b));
     pr.catch(() => thumbCache.delete(p.id));
     thumbCache.set(p.id, pr);
   }
@@ -257,19 +293,20 @@ const io = new IntersectionObserver(entries => {
     if (!en.isIntersecting) return;
     io.unobserve(en.target);
     const p = photos.find(x => x.id === en.target.dataset.id);
-    if (!p || !p.thumbnailLink) return;
-    thumbUrl(p).then(url => { en.target.querySelector('img').src = url; }).catch(() => {});
+    if (!p) return;
+    enqueue(() => thumbUrl(p).then(url => { en.target.querySelector('img').src = url; }));
   });
-}, { rootMargin: '300px' });
+}, { rootMargin: '400px' });
 
 function renderGrid() {
   io.disconnect();
+  queue.length = 0;
   gallery.innerHTML = '';
   photos.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.dataset.id = p.id;
-    card.innerHTML = '<img alt="" loading="lazy"><span></span>';
+    card.innerHTML = '<img alt=""><span></span>';
     card.querySelector('span').textContent = p.name;
     card.onclick = () => openImage(i);
     gallery.appendChild(card);
@@ -287,7 +324,6 @@ function fullUrl(id) {
       .then(r => r.blob()).then(b => URL.createObjectURL(b));
     pr.catch(() => fullCache.delete(id));
     fullCache.set(id, pr);
-    // Drop the oldest full-size picture when the cache gets too large
     if (fullCache.size > FULL_CACHE_MAX) {
       const oldest = fullCache.keys().next().value;
       fullCache.get(oldest).then(u => URL.revokeObjectURL(u)).catch(() => {});
@@ -301,13 +337,12 @@ function fullUrl(id) {
 
 function buildMultipart(meta, file) {
   const boundary = 'gallery' + Date.now();
-  const body = new Blob([
+  return new Blob([
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
     `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
     file,
     `\r\n--${boundary}--`
   ], { type: 'multipart/related; boundary=' + boundary });
-  return body;
 }
 
 $('uploadBtn').onclick = async () => {
@@ -434,7 +469,6 @@ async function openImage(index) {
     if (token === viewToken) viewerImg.classList.remove('loading');
   }
 
-  // Preload neighbors so arrow navigation feels instant
   if (total > 1) {
     [index + 1, index - 1].forEach(j => {
       fullUrl(photos[wrap(j, total)].id).catch(() => {});
@@ -469,7 +503,6 @@ document.addEventListener('keydown', e => {
   else if (e.key === '0') resetZoom();
 });
 
-// Touch: swipe to change pictures at normal zoom, one-finger drag to pan when zoomed
 let touchStartX = null, touchStartY = null, touchPanStartX = 0, touchPanStartY = 0;
 
 stage.addEventListener('touchstart', e => {
@@ -493,6 +526,8 @@ stage.addEventListener('touchend', e => {
   touchStartX = null;
   if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNext() : showPrev();
 });
+
+initGoogle();
 </script>
 </body>
 </html>
