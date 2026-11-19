@@ -84,9 +84,20 @@
   .user-text { min-width: 0; line-height: 1.25; }
   #uname { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #uemail { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+  .tabs {
+    display: flex; gap: 4px; padding: 4px; border-radius: 999px;
+    background: rgba(255, 255, 255, .05); border: 1px solid var(--line);
+  }
+  .tabs button {
+    background: none; border: none; color: var(--muted); font: inherit; font-size: 13px;
+    padding: 7px 14px; border-radius: 999px; cursor: pointer; transition: color .2s, background .2s;
+  }
+  .tabs button:hover { color: #fff; }
+  .tabs button.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+
   .search {
-    margin-left: auto; width: min(300px, 36vw); padding: 10px 14px 10px 36px;
+    margin-left: auto; width: min(260px, 30vw); padding: 10px 14px 10px 36px;
     border-radius: 999px; border: 1px solid var(--line); background-color: rgba(255, 255, 255, .04);
     color: var(--text); font: inherit; font-size: 14px; outline: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b90a0' stroke-width='2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='M11 11l4 4'/%3E%3C/svg%3E");
@@ -101,9 +112,15 @@
   }
   .ghost:hover { color: #fff; background: rgba(255, 255, 255, .12); }
 
-  /* ---------- Grid ---------- */
-  main {
-    display: grid; gap: 18px; padding: 24px 22px 60px;
+  /* ---------- Section headings ---------- */
+  .sec { display: flex; align-items: baseline; gap: 10px; padding: 26px 22px 14px; }
+  .sec h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .2px; }
+  .sec .n { font-size: 13px; color: var(--muted); }
+  .sec .line { flex: 1; height: 1px; background: var(--line); margin-left: 8px; }
+
+  /* ---------- Photo grid (portrait cards) ---------- */
+  .grid {
+    display: grid; gap: 18px; padding: 0 22px 20px;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   }
   .card {
@@ -116,18 +133,18 @@
     transform: translateY(-5px); border-color: rgba(124, 92, 255, .55);
     box-shadow: 0 22px 44px -16px rgba(124, 92, 255, .5);
   }
-  .card img {
+  .card img, .vcard img {
     width: 100%; height: 100%; object-fit: cover; display: block;
     opacity: 0; transition: opacity .5s, transform .6s cubic-bezier(.2, .8, .2, 1);
   }
-  .card img.ready { opacity: 1; }
-  .card:hover img.ready { transform: scale(1.06); }
-  .card::after {
+  .card img.ready, .vcard img.ready { opacity: 1; }
+  .card:hover img.ready, .vcard:hover img.ready { transform: scale(1.06); }
+  .card::after, .vcard::after {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .06) 50%, transparent 60%);
     background-size: 250% 100%; animation: shimmer 1.6s infinite;
   }
-  .card.ready::after { display: none; }
+  .card.ready::after, .vcard.ready::after { display: none; }
   .card .cap {
     position: absolute; left: 0; right: 0; bottom: 0; padding: 36px 14px 12px;
     background: linear-gradient(transparent, rgba(0, 0, 0, .9));
@@ -135,28 +152,63 @@
     opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s;
   }
   .card:hover .cap { opacity: 1; transform: none; }
-  .badge {
-    position: absolute; top: 10px; left: 10px; z-index: 1; width: 34px; height: 34px;
-    border-radius: 50%; background: rgba(0, 0, 0, .55); border: 1px solid var(--line);
-    backdrop-filter: blur(8px); display: grid; place-items: center; pointer-events: none;
+
+  /* ---------- Video grid (wide cards, distinct from photos) ---------- */
+  .vgrid {
+    display: grid; gap: 16px; padding: 0 22px 20px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
-  .badge::after {
-    content: ''; margin-left: 3px; border-style: solid; border-width: 6px 0 6px 10px;
+  .vcard {
+    position: relative; aspect-ratio: 16 / 9; overflow: hidden; cursor: pointer;
+    border-radius: 16px; background: linear-gradient(135deg, #15121f, #0a1116);
+    border: 1px solid var(--line); animation: rise .5s both;
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s, border-color .3s;
+  }
+  .vcard:hover {
+    transform: translateY(-3px); border-color: rgba(34, 211, 238, .45);
+    box-shadow: 0 20px 40px -18px rgba(34, 211, 238, .4);
+  }
+  .vcard .scrim {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to top, rgba(0, 0, 0, .88), rgba(0, 0, 0, 0) 55%);
+  }
+  .vcard .play {
+    position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px;
+    border-radius: 50%; display: grid; place-items: center;
+    background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .3);
+    backdrop-filter: blur(8px); transition: transform .25s, background .25s;
+  }
+  .vcard .play::after {
+    content: ''; margin-left: 4px; border-style: solid; border-width: 10px 0 10px 16px;
     border-color: transparent transparent transparent #fff;
   }
-  .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+  .vcard:hover .play { transform: scale(1.1); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .vcard .meta {
+    position: absolute; left: 14px; right: 14px; bottom: 12px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 10px;
+  }
+  .vcard .vname {
+    font-size: 14px; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .vcard .dur {
+    flex: none; font-size: 12px; padding: 3px 8px; border-radius: 6px;
+    background: rgba(0, 0, 0, .65); font-variant-numeric: tabular-nums;
+  }
+
+  .empty { text-align: center; color: var(--muted); padding: 60px 22px; }
+  .none { color: var(--muted); font-size: 14px; padding: 0 22px 24px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
   @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
-  /* ---------- Viewer ---------- */
+  /* ---------- Photo viewer ---------- */
   #viewer {
     position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, .94); backdrop-filter: blur(10px); touch-action: none; overflow: hidden;
     animation: fade .25s both;
   }
   #viewer.show { display: flex; }
-  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: grab; }
   #stage.dragging { cursor: grabbing; }
   #viewerImg {
@@ -166,10 +218,6 @@
   }
   #viewerImg.loading { opacity: .3; }
   #viewerImg.no-anim { transition: none; }
-  #viewerVid {
-    max-width: 92vw; max-height: 84vh; border-radius: 12px; background: #000;
-    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .9); outline: none;
-  }
 
   .glass {
     position: absolute; z-index: 2; background: rgba(20, 20, 26, .55); color: #fff;
@@ -198,15 +246,48 @@
   #zoomBar button:hover { background: rgba(255, 255, 255, .12); }
   #zoomLabel { font-size: 13px; color: #cbd5e1; min-width: 50px; text-align: center; }
 
+  /* ---------- Video player panel (separate design) ---------- */
+  #videoViewer {
+    position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center;
+    padding: 20px; background: rgba(0, 0, 0, .9); backdrop-filter: blur(14px); animation: fade .25s both;
+  }
+  #videoViewer.show { display: flex; }
+  .vv-panel {
+    width: min(960px, 100%); background: #0b0b10; border: 1px solid var(--line); border-radius: 22px;
+    overflow: hidden; box-shadow: 0 40px 100px -20px rgba(0, 0, 0, .9); animation: rise .35s both;
+  }
+  .vv-head {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line);
+  }
+  .vv-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vv-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .vv-btn {
+    width: 38px; height: 38px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    border: 1px solid var(--line); background: rgba(255, 255, 255, .06); color: #fff;
+    font-size: 20px; line-height: 1; cursor: pointer; transition: background .2s;
+  }
+  .vv-btn:hover { background: rgba(255, 255, 255, .16); }
+  .vv-btn:disabled { opacity: .3; cursor: default; }
+  .vv-video { display: block; width: 100%; max-height: 72vh; background: #000; }
+  .vv-foot {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px;
+  }
+  .vv-status { font-size: 13px; color: var(--muted); }
+  .vv-nav { display: flex; gap: 8px; }
+
   @media (max-width: 640px) {
     .topbar { padding: 12px 14px; gap: 10px; }
     .user { width: 100%; order: -1; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
     .brand { font-size: 16px; }
+    .tabs { order: 2; }
     .search { order: 3; width: 100%; margin-left: 0; }
-    .count { margin-left: auto; }
-    main { padding: 16px 12px 40px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .sec { padding: 20px 14px 10px; }
+    .grid { padding: 0 12px 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .vgrid { padding: 0 12px 16px; gap: 12px; grid-template-columns: 1fr; }
     .nav { width: 42px; height: 42px; font-size: 24px; }
     #prevBtn { left: 6px; } #nextBtn { right: 6px; }
+    #videoViewer { padding: 10px; }
+    .vv-panel { border-radius: 16px; }
   }
 </style>
 </head>
@@ -216,7 +297,7 @@
   <div class="login-card">
     <div class="logo">F</div>
     <h1>Family Gallery</h1>
-    <p>Sign in with an approved Google account to view the pictures.</p>
+    <p>Sign in with an approved Google account to view the pictures and videos.</p>
     <button id="loginBtn" class="btn btn-google"><span class="gdot"></span>Sign in with Google</button>
     <div id="loginMsg"></div>
     <a id="openChrome" class="btn" href="#" hidden style="margin-top:12px;text-decoration:none">Open in Chrome</a>
@@ -233,17 +314,33 @@
         <div id="uemail"></div>
       </div>
     </div>
-    <span id="count" class="count"></span>
-    <input id="search" class="search" type="search" placeholder="Search pictures and videos" autocomplete="off">
+    <div class="tabs" role="tablist">
+      <button data-f="all" class="on">All</button>
+      <button data-f="photos">Photos</button>
+      <button data-f="videos">Videos</button>
+    </div>
+    <input id="search" class="search" type="search" placeholder="Search" autocomplete="off">
     <button id="signOutBtn" class="ghost">Sign out</button>
   </header>
 
-  <main id="gallery"></main>
+  <main>
+    <section id="photosSection">
+      <div class="sec"><h2>Photos</h2><span class="n" id="photoCount"></span><span class="line"></span></div>
+      <div id="photoGrid" class="grid"></div>
+    </section>
 
+    <section id="videosSection">
+      <div class="sec"><h2>Videos</h2><span class="n" id="videoCount"></span><span class="line"></span></div>
+      <div id="videoGrid" class="vgrid"></div>
+    </section>
+
+    <div id="empty" class="empty" hidden>No pictures or videos found in this folder.</div>
+  </main>
+
+  <!-- Photo viewer -->
   <div id="viewer">
     <div id="stage">
       <img id="viewerImg" alt="" draggable="false">
-      <video id="viewerVid" controls playsinline preload="metadata" hidden></video>
     </div>
     <button id="closeBtn" class="glass" aria-label="Close">&times;</button>
     <button id="prevBtn" class="glass nav" aria-label="Previous">&#8249;</button>
@@ -254,6 +351,25 @@
       <span id="zoomLabel">100%</span>
       <button id="zoomInBtn" aria-label="Zoom in">+</button>
       <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
+    </div>
+  </div>
+
+  <!-- Video player -->
+  <div id="videoViewer">
+    <div class="vv-panel">
+      <div class="vv-head">
+        <div id="vvTitle" class="vv-title"></div>
+        <span id="vvCount" class="vv-count"></span>
+        <button id="vvClose" class="vv-btn" aria-label="Close">&times;</button>
+      </div>
+      <video id="vvVideo" class="vv-video" controls playsinline preload="auto"></video>
+      <div class="vv-foot">
+        <span id="vvStatus" class="vv-status"></span>
+        <div class="vv-nav">
+          <button id="vvPrev" class="vv-btn" aria-label="Previous video">&#8249;</button>
+          <button id="vvNext" class="vv-btn" aria-label="Next video">&#8250;</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -279,13 +395,23 @@ const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
 
 const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
-const gallery = $('gallery'), countEl = $('count'), searchEl = $('search');
 const userEl = $('user'), avatarEl = $('avatar'), unameEl = $('uname'), uemailEl = $('uemail');
-const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg'), viewerVid = $('viewerVid');
-const zoomBar = $('zoomBar');
+const countEl = $('count');
+const searchEl = $('search');
+const photosSection = $('photosSection'), videosSection = $('videosSection');
+const photoGrid = $('photoGrid'), videoGrid = $('videoGrid'), emptyEl = $('empty');
+const photoCountEl = $('photoCount'), videoCountEl = $('videoCount');
+
+// Photo viewer
+const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
 
+// Video viewer
+const videoViewer = $('videoViewer'), vvVideo = $('vvVideo'), vvTitle = $('vvTitle');
+const vvCount = $('vvCount'), vvStatus = $('vvStatus'), vvPrev = $('vvPrev'), vvNext = $('vvNext');
+
 const isVideo = p => (p.mimeType || '').startsWith('video/');
+const wrap = (i, total) => ((i % total) + total) % total;
 
 // ---- Screens ----
 
@@ -323,8 +449,10 @@ let tokenClient = null, accessToken = null, tokenExpiresAt = 0;
 let pendingResolve = null, pendingReject = null;
 let session = null;
 let refreshTimer = null;
-let photos = [];
+let photos = [], picList = [], vidList = [], byId = new Map();
 let currentIndex = -1, viewToken = 0;
+let vIndex = -1, vToken = 0, vidObjUrl = null;
+let filter = 'all';
 
 function onTokenResponse(resp) {
   if (!pendingResolve) return;
@@ -373,7 +501,6 @@ async function connect(prompt) {
   scheduleRenewal();
 }
 
-// Makes sure the token is valid for at least another minute before using it
 async function ensureToken() {
   if (accessToken && Date.now() < tokenExpiresAt - 60 * 1000) return;
   await connect('');
@@ -382,16 +509,12 @@ async function ensureToken() {
 function scheduleRenewal() {
   clearTimeout(refreshTimer);
   const delay = Math.max(30, (tokenExpiresAt - Date.now()) / 1000 - 300) * 1000;
-  refreshTimer = setTimeout(renewSilently, delay);
-}
-
-function renewSilently() {
-  connect('').catch(() => {});
+  refreshTimer = setTimeout(() => connect('').catch(() => {}), delay);
 }
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && session && accessToken && tokenExpiresAt - Date.now() < 5 * 60 * 1000) {
-    renewSilently();
+    connect('').catch(() => {});
   }
 });
 
@@ -450,9 +573,9 @@ $('signOutBtn').onclick = () => {
   session = null;
   clearTimeout(refreshTimer);
   localStorage.removeItem(SESSION_KEY);
-  photos = [];
-  gallery.innerHTML = '';
-  countEl.textContent = '';
+  photos = []; picList = []; vidList = []; byId = new Map();
+  photoGrid.innerHTML = ''; videoGrid.innerHTML = '';
+  setCount('');
   renderUser();
   showLogin('Signed out.');
 };
@@ -477,7 +600,7 @@ async function driFetch(url, opts = {}, retry = true) {
   return res;
 }
 
-// ---- Listing (pictures and videos) ----
+// ---- Listing ----
 
 async function listFolder() {
   const files = [];
@@ -485,7 +608,7 @@ async function listFolder() {
   do {
     const params = new URLSearchParams({
       q: `'${FOLDER_ID}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
-      fields: 'nextPageToken,files(id,name,mimeType,thumbnailLink)',
+      fields: 'nextPageToken,files(id,name,mimeType,thumbnailLink,videoMediaMetadata(durationMillis))',
       pageSize: '1000',
       orderBy: 'name'
     });
@@ -503,14 +626,14 @@ async function refresh() {
   setCount('Loading…');
   try {
     photos = await listFolder();
-    renderGrid();
+    renderGrids();
   } catch (e) {
-    setCount('Could not load pictures');
+    setCount('Could not load');
     console.error(e);
   }
 }
 
-// ---- Thumbnails ----
+// ---- Thumbnails (shared by both grids) ----
 
 const queue = [];
 let activeJobs = 0;
@@ -524,16 +647,17 @@ function pump() {
   }
 }
 
-async function loadThumb(p, img) {
-  if (!p.thumbnailLink) { img.classList.add('ready'); return; }
+async function loadThumb(p, img, card) {
+  if (!p.thumbnailLink) { img.classList.add('ready'); card.classList.add('ready'); return; }
   const url = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
   let src = url;
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
     if (res.ok) src = URL.createObjectURL(await res.blob());
   } catch (e) {}
-  img.onload = () => img.classList.add('ready');
-  img.onerror = () => img.classList.add('ready');
+  const done = () => { img.classList.add('ready'); card.classList.add('ready'); };
+  img.onload = done;
+  img.onerror = done;
   img.src = src;
 }
 
@@ -541,59 +665,102 @@ const io = new IntersectionObserver(entries => {
   entries.forEach(en => {
     if (!en.isIntersecting) return;
     io.unobserve(en.target);
-    const p = photos.find(x => x.id === en.target.dataset.id);
+    const p = byId.get(en.target.dataset.id);
     if (!p) return;
-    enqueue(() => loadThumb(p, en.target.querySelector('img')));
+    enqueue(() => loadThumb(p, en.target.querySelector('img'), en.target));
   });
 }, { rootMargin: '400px' });
 
-function renderGrid() {
+function fmtDuration(ms) {
+  if (!ms) return '';
+  const s = Math.round(Number(ms) / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+function renderGrids() {
   io.disconnect();
   queue.length = 0;
-  gallery.innerHTML = '';
+  photoGrid.innerHTML = '';
+  videoGrid.innerHTML = '';
+  byId = new Map(photos.map(p => [p.id, p]));
+  picList = photos.filter(p => !isVideo(p));
+  vidList = photos.filter(isVideo);
 
-  if (!photos.length) {
-    gallery.innerHTML = '<div class="empty">No pictures or videos found in this folder.</div>';
-    setCount('0 items');
-    return;
-  }
-
-  photos.forEach((p, i) => {
+  picList.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.dataset.id = p.id;
     card.style.animationDelay = Math.min(i, 30) * 25 + 'ms';
     card.innerHTML = '<img alt=""><div class="cap"></div>';
     card.querySelector('.cap').textContent = p.name;
-    if (isVideo(p)) {
-      const b = document.createElement('span');
-      b.className = 'badge';
-      card.appendChild(b);
-    }
-    card.onclick = () => openImage(indexOf(p.id));
-    gallery.appendChild(card);
+    card.onclick = () => openPhoto(i);
+    photoGrid.appendChild(card);
     io.observe(card);
   });
-  applySearch();
-}
 
-function indexOf(id) { return photos.findIndex(p => p.id === id); }
-
-function applySearch() {
-  const q = searchEl.value.trim().toLowerCase();
-  let visible = 0;
-  gallery.querySelectorAll('.card').forEach(card => {
-    const name = (card.querySelector('.cap').textContent || '').toLowerCase();
-    const show = !q || name.includes(q);
-    card.hidden = !show;
-    if (show) visible++;
+  vidList.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'vcard';
+    card.dataset.id = p.id;
+    card.style.animationDelay = Math.min(i, 30) * 25 + 'ms';
+    card.innerHTML = `
+      <img alt="">
+      <div class="scrim"></div>
+      <div class="play"></div>
+      <div class="meta">
+        <span class="vname"></span>
+        <span class="dur"></span>
+      </div>`;
+    card.querySelector('.vname').textContent = p.name;
+    card.querySelector('.dur').textContent = fmtDuration(p.videoMediaMetadata && p.videoMediaMetadata.durationMillis);
+    card.onclick = () => openVideo(i);
+    videoGrid.appendChild(card);
+    io.observe(card);
   });
-  setCount(visible + (visible === 1 ? ' item' : ' items'));
+
+  emptyEl.hidden = photos.length > 0;
+  photoCountEl.textContent = picList.length;
+  videoCountEl.textContent = vidList.length;
+  applyFilters();
 }
 
-searchEl.addEventListener('input', applySearch);
+// ---- Search and tabs ----
 
-// ---- Full-size pictures ----
+function applyFilters() {
+  const q = searchEl.value.trim().toLowerCase();
+  let pv = 0, vv = 0;
+
+  photoGrid.querySelectorAll('.card').forEach(card => {
+    const show = !q || card.querySelector('.cap').textContent.toLowerCase().includes(q);
+    card.hidden = !show;
+    if (show) pv++;
+  });
+  videoGrid.querySelectorAll('.vcard').forEach(card => {
+    const show = !q || card.querySelector('.vname').textContent.toLowerCase().includes(q);
+    card.hidden = !show;
+    if (show) vv++;
+  });
+
+  photosSection.hidden = filter === 'videos';
+  videosSection.hidden = filter === 'photos';
+
+  const shown = (filter !== 'videos' ? pv : 0) + (filter !== 'photos' ? vv : 0);
+  setCount(shown + (shown === 1 ? ' item' : ' items'));
+}
+
+searchEl.addEventListener('input', applyFilters);
+
+document.querySelectorAll('.tabs button').forEach(btn => {
+  btn.onclick = () => {
+    filter = btn.dataset.f;
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b === btn));
+    applyFilters();
+  };
+});
+
+// ---- Full-size photos ----
 
 const fullCache = new Map();
 function fullUrl(id) {
@@ -611,12 +778,7 @@ function fullUrl(id) {
   return fullCache.get(id);
 }
 
-// Videos stream straight from Drive, so large files start playing without downloading first
-function videoUrl(id) {
-  return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
-}
-
-// ---- Zoom and pan (pictures only) ----
+// ---- Zoom and pan (photos only) ----
 
 let zoom = 1, panX = 0, panY = 0;
 
@@ -653,7 +815,7 @@ $('zoomOutBtn').onclick = e => { e.stopPropagation(); setZoom(zoom - ZOOM_STEP);
 $('zoomResetBtn').onclick = e => { e.stopPropagation(); resetZoom(); };
 
 stage.addEventListener('wheel', e => {
-  if (!viewer.classList.contains('show') || viewerImg.hidden) return;
+  if (!viewer.classList.contains('show')) return;
   e.preventDefault();
   setZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
 }, { passive: false });
@@ -661,7 +823,7 @@ stage.addEventListener('wheel', e => {
 let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
 
 stage.addEventListener('mousedown', e => {
-  if (zoom <= 1 || viewerImg.hidden) return;
+  if (zoom <= 1) return;
   dragging = true;
   dragStartX = e.clientX; dragStartY = e.clientY;
   panStartX = panX; panStartY = panY;
@@ -683,103 +845,62 @@ window.addEventListener('mouseup', () => {
 });
 
 stage.addEventListener('dblclick', () => {
-  if (viewerImg.hidden) return;
   if (zoom > 1) resetZoom(); else setZoom(2.5);
 });
 
-// ---- Viewer ----
+// ---- Photo viewer ----
 
-const wrap = (i, total) => ((i % total) + total) % total;
-
-function stopVideo() {
-  viewerVid.pause();
-  viewerVid.removeAttribute('src');
-  viewerVid.load();
-}
-
-async function openImage(index) {
-  const total = photos.length;
+async function openPhoto(index) {
+  const total = picList.length;
   if (!total) return;
   index = wrap(index, total);
   currentIndex = index;
   const token = ++viewToken;
-  const p = photos[index];
-  const video = isVideo(p);
+  const p = picList[index];
 
   viewer.classList.add('show');
+  viewerImg.classList.add('loading');
+  viewerImg.removeAttribute('src');
+  resetZoom();
   counterEl.textContent = (index + 1) + ' / ' + total + '   ·   ' + p.name;
   prevBtn.disabled = nextBtn.disabled = total < 2;
-  stopVideo();
-  resetZoom();
 
-  if (video) {
-    viewerImg.hidden = true;
-    zoomBar.hidden = true;
-    viewerVid.hidden = false;
-    try {
-      await ensureToken();
-      if (token !== viewToken) return;
-      viewerVid.src = videoUrl(p.id);
-    } catch (e) {
-      if (token !== viewToken) return;
-      counterEl.textContent = 'Could not play ' + p.name;
-    }
-  } else {
-    viewerVid.hidden = true;
-    viewerImg.hidden = false;
-    zoomBar.hidden = false;
-    viewerImg.classList.add('loading');
-    viewerImg.removeAttribute('src');
-    try {
-      const url = await fullUrl(p.id);
-      if (token !== viewToken) return;
-      viewerImg.src = url;
-    } catch (e) {
-      if (token !== viewToken) return;
-      counterEl.textContent = 'Could not open ' + p.name;
-    } finally {
-      if (token === viewToken) viewerImg.classList.remove('loading');
-    }
+  try {
+    const url = await fullUrl(p.id);
+    if (token !== viewToken) return;
+    viewerImg.src = url;
+  } catch (e) {
+    if (token !== viewToken) return;
+    counterEl.textContent = 'Could not open ' + p.name;
+  } finally {
+    if (token === viewToken) viewerImg.classList.remove('loading');
   }
 
-  // Preload the neighbouring pictures (videos stream, so they're not preloaded)
   if (total > 1) {
     [index + 1, index - 1].forEach(j => {
-      const q = photos[wrap(j, total)];
-      if (!isVideo(q)) fullUrl(q.id).catch(() => {});
+      fullUrl(picList[wrap(j, total)].id).catch(() => {});
     });
   }
 }
 
-const showNext = () => { if (currentIndex !== -1) openImage(currentIndex + 1); };
-const showPrev = () => { if (currentIndex !== -1) openImage(currentIndex - 1); };
+const showNextPhoto = () => { if (currentIndex !== -1) openPhoto(currentIndex + 1); };
+const showPrevPhoto = () => { if (currentIndex !== -1) openPhoto(currentIndex - 1); };
 
-function closeViewer() {
+function closePhoto() {
   viewToken++;
   dragging = false;
   viewer.classList.remove('show');
   viewerImg.removeAttribute('src');
-  stopVideo();
   currentIndex = -1;
   resetZoom();
 }
 
-$('closeBtn').onclick = closeViewer;
-prevBtn.onclick = e => { e.stopPropagation(); showPrev(); };
-nextBtn.onclick = e => { e.stopPropagation(); showNext(); };
-viewer.onclick = e => { if (e.target === viewer || e.target === stage) closeViewer(); };
+$('closeBtn').onclick = closePhoto;
+prevBtn.onclick = e => { e.stopPropagation(); showPrevPhoto(); };
+nextBtn.onclick = e => { e.stopPropagation(); showNextPhoto(); };
+viewer.onclick = e => { if (e.target === viewer || e.target === stage) closePhoto(); };
 
-document.addEventListener('keydown', e => {
-  if (!viewer.classList.contains('show')) return;
-  if (e.key === 'ArrowRight') showNext();
-  else if (e.key === 'ArrowLeft') showPrev();
-  else if (e.key === 'Escape') closeViewer();
-  else if (e.key === '+' || e.key === '=') setZoom(zoom + ZOOM_STEP);
-  else if (e.key === '-') setZoom(zoom - ZOOM_STEP);
-  else if (e.key === '0') resetZoom();
-});
-
-// Touch: swipe to change pictures at normal zoom, one finger drags when zoomed
+// Photo swipe (normal zoom only)
 let touchStartX = null, touchStartY = null, touchPanStartX = 0, touchPanStartY = 0;
 
 stage.addEventListener('touchstart', e => {
@@ -790,7 +911,7 @@ stage.addEventListener('touchstart', e => {
 }, { passive: true });
 
 stage.addEventListener('touchmove', e => {
-  if (zoom <= 1 || viewerImg.hidden || e.touches.length !== 1 || touchStartX === null) return;
+  if (zoom <= 1 || e.touches.length !== 1 || touchStartX === null) return;
   e.preventDefault();
   panX = touchPanStartX + (e.touches[0].clientX - touchStartX);
   panY = touchPanStartY + (e.touches[0].clientY - touchStartY);
@@ -801,10 +922,87 @@ stage.addEventListener('touchend', e => {
   if (touchStartX === null) return;
   const dx = e.changedTouches[0].clientX - touchStartX;
   touchStartX = null;
-  if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNext() : showPrev();
+  if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNextPhoto() : showPrevPhoto();
 });
 
-// Chrome-on-iPhone button (shown only in iPhone Safari)
+// ---- Video player ----
+
+// The video is downloaded with the permission header, then played from a local copy
+function stopVideo() {
+  vvVideo.pause();
+  if (vidObjUrl) { URL.revokeObjectURL(vidObjUrl); vidObjUrl = null; }
+  vvVideo.removeAttribute('src');
+  vvVideo.load();
+}
+
+async function openVideo(index) {
+  const total = vidList.length;
+  if (!total) return;
+  vIndex = wrap(index, total);
+  const token = ++vToken;
+  const p = vidList[vIndex];
+
+  videoViewer.classList.add('show');
+  vvTitle.textContent = p.name;
+  vvCount.textContent = (vIndex + 1) + ' / ' + total;
+  vvPrev.disabled = vvNext.disabled = total < 2;
+  vvStatus.textContent = 'Loading video…';
+  stopVideo();
+
+  try {
+    const res = await driFetch(`https://www.googleapis.com/drive/v3/files/${p.id}?alt=media`);
+    const blob = await res.blob();
+    if (token !== vToken) return;
+    const typed = new Blob([blob], { type: p.mimeType || 'video/mp4' });
+    vidObjUrl = URL.createObjectURL(typed);
+    vvVideo.src = vidObjUrl;
+    vvStatus.textContent = '';
+    vvVideo.play().catch(() => {});
+  } catch (e) {
+    if (token === vToken) vvStatus.textContent = 'Could not load this video (' + e.message + ')';
+  }
+}
+
+vvVideo.onerror = () => {
+  if (!vvVideo.getAttribute('src')) return;
+  vvStatus.textContent = 'This video format cannot play in this browser. Open it in Google Drive.';
+};
+
+const showNextVideo = () => { if (vIndex !== -1) openVideo(vIndex + 1); };
+const showPrevVideo = () => { if (vIndex !== -1) openVideo(vIndex - 1); };
+
+function closeVideo() {
+  vToken++;
+  vIndex = -1;
+  stopVideo();
+  videoViewer.classList.remove('show');
+}
+
+$('vvClose').onclick = closeVideo;
+vvPrev.onclick = showPrevVideo;
+vvNext.onclick = showNextVideo;
+videoViewer.onclick = e => { if (e.target === videoViewer) closeVideo(); };
+
+// ---- Keyboard ----
+
+document.addEventListener('keydown', e => {
+  if (videoViewer.classList.contains('show')) {
+    if (e.key === 'ArrowRight') showNextVideo();
+    else if (e.key === 'ArrowLeft') showPrevVideo();
+    else if (e.key === 'Escape') closeVideo();
+    return;
+  }
+  if (!viewer.classList.contains('show')) return;
+  if (e.key === 'ArrowRight') showNextPhoto();
+  else if (e.key === 'ArrowLeft') showPrevPhoto();
+  else if (e.key === 'Escape') closePhoto();
+  else if (e.key === '+' || e.key === '=') setZoom(zoom + ZOOM_STEP);
+  else if (e.key === '-') setZoom(zoom - ZOOM_STEP);
+  else if (e.key === '0') resetZoom();
+});
+
+// ---- iPhone Safari: offer Chrome ----
+
 (function () {
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/.test(ua);
