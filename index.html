@@ -65,19 +65,29 @@
 
   /* ---------- Top bar ---------- */
   .topbar {
-    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px;
-    padding: 14px 22px; background: rgba(5, 5, 7, .7); backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
+    padding: 12px 22px; background: rgba(5, 5, 7, .75); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line); flex-wrap: wrap;
   }
   .brand {
     font-weight: 800; font-size: 18px; letter-spacing: .3px;
     background: linear-gradient(90deg, #fff, #c4b5fd, #67e8f9);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  .user { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex: none; overflow: hidden;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #fff;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .user-text { min-width: 0; line-height: 1.25; }
+  #uname { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #uemail { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .count { font-size: 13px; color: var(--muted); white-space: nowrap; }
   .search {
-    margin-left: auto; width: min(340px, 40vw); padding: 10px 14px 10px 36px;
-    border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04);
+    margin-left: auto; width: min(300px, 36vw); padding: 10px 14px 10px 36px;
+    border-radius: 999px; border: 1px solid var(--line); background-color: rgba(255, 255, 255, .04);
     color: var(--text); font: inherit; font-size: 14px; outline: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b90a0' stroke-width='2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='M11 11l4 4'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: 12px center;
@@ -167,9 +177,7 @@
     bottom: 22px; left: 50%; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px;
     font-size: 13px; color: #e5e7eb; white-space: nowrap; max-width: 80vw; overflow: hidden; text-overflow: ellipsis;
   }
-  #zoomBar {
-    bottom: 22px; right: 18px; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px;
-  }
+  #zoomBar { bottom: 22px; right: 18px; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px; }
   #zoomBar button {
     background: transparent; border: none; color: #fff; height: 34px; min-width: 34px; border-radius: 999px;
     font: inherit; font-size: 16px; cursor: pointer; padding: 0 10px;
@@ -178,8 +186,11 @@
   #zoomLabel { font-size: 13px; color: #cbd5e1; min-width: 50px; text-align: center; }
 
   @media (max-width: 640px) {
-    .topbar { flex-wrap: wrap; padding: 12px 14px; }
+    .topbar { padding: 12px 14px; gap: 10px; }
+    .user { width: 100%; order: -1; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+    .brand { font-size: 16px; }
     .search { order: 3; width: 100%; margin-left: 0; }
+    .count { margin-left: auto; }
     main { padding: 16px 12px 40px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .nav { width: 42px; height: 42px; font-size: 24px; }
     #prevBtn { left: 6px; } #nextBtn { right: 6px; }
@@ -201,6 +212,13 @@
 <div id="app" hidden>
   <header class="topbar">
     <div class="brand">Family Gallery</div>
+    <div id="user" class="user" hidden>
+      <span id="avatar" class="avatar"></span>
+      <div class="user-text">
+        <div id="uname"></div>
+        <div id="uemail"></div>
+      </div>
+    </div>
     <span id="count" class="count"></span>
     <input id="search" class="search" type="search" placeholder="Search pictures" autocomplete="off">
     <button id="signOutBtn" class="ghost">Sign out</button>
@@ -235,8 +253,8 @@ const ALLOWED_EMAILS = [
   'prakashbudhathoki3333@gmail.com',
   'kawarlila26@gmail.com'
 ];
-const SCOPES = 'openid email https://www.googleapis.com/auth/drive.readonly';
-const TOKEN_KEY = 'gallery_token';
+const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.readonly';
+const SESSION_KEY = 'gallery_session';
 const THUMB_PX = 480;
 const MAX_PARALLEL_THUMBS = 6;
 const FULL_CACHE_MAX = 20;
@@ -247,6 +265,7 @@ const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
 const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
 const gallery = $('gallery'), countEl = $('count'), searchEl = $('search');
+const userEl = $('user'), avatarEl = $('avatar'), unameEl = $('uname'), uemailEl = $('uemail');
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
 
@@ -263,10 +282,29 @@ function showApp() {
   appEl.hidden = false;
 }
 
+function renderUser() {
+  if (!session) { userEl.hidden = true; return; }
+  userEl.hidden = false;
+  unameEl.textContent = session.name || session.email;
+  uemailEl.textContent = session.email;
+  avatarEl.innerHTML = '';
+  if (session.picture) {
+    const img = document.createElement('img');
+    img.src = session.picture;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    avatarEl.appendChild(img);
+  } else {
+    avatarEl.textContent = (session.name || session.email).charAt(0).toUpperCase();
+  }
+}
+
 // ---- Google sign-in (Google Identity Services) ----
 
-let tokenClient = null, accessToken = null;
+let tokenClient = null, accessToken = null, tokenExpiresAt = 0;
 let pendingResolve = null, pendingReject = null;
+let session = null;          // { email, name, picture }
+let refreshTimer = null;
 let photos = [];
 let currentIndex = -1, viewToken = 0;
 
@@ -277,54 +315,84 @@ function onTokenResponse(resp) {
   pendingResolve = pendingReject = null;
 }
 
+// prompt '' = silent when possible. login_hint tells Google which account to renew
 function requestToken(prompt) {
   return new Promise((resolve, reject) => {
     pendingResolve = resolve;
     pendingReject = reject;
-    tokenClient.requestAccessToken({ prompt });
+    const cfg = { prompt };
+    if (session && session.email) cfg.hint = session.email;
+    tokenClient.requestAccessToken(cfg);
   });
 }
 
-function saveSession(token, email, expiresIn) {
-  try {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, email, exp: Date.now() + expiresIn * 1000 }));
-  } catch (e) {}
+function saveSession() {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
 }
 
-function loadSession() {
+function readSession() {
   try {
-    const s = JSON.parse(localStorage.getItem(TOKEN_KEY));
-    if (s && s.exp - Date.now() > 60 * 1000 && ALLOWED_EMAILS.includes(s.email)) return s;
-  } catch (e) {}
-  return null;
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY));
+    return s && ALLOWED_EMAILS.includes(s.email) ? s : null;
+  } catch (e) { return null; }
 }
 
-async function connectDrive(prompt) {
+// Gets a token, confirms the account is allowed, and keeps the user's name and email
+async function connect(prompt) {
   const resp = await requestToken(prompt);
   const info = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: 'Bearer ' + resp.access_token }
   })).json();
   const email = (info.email || '').toLowerCase();
   if (!ALLOWED_EMAILS.includes(email)) {
-    localStorage.removeItem(TOKEN_KEY);
+    session = null;
+    localStorage.removeItem(SESSION_KEY);
     throw new Error('This account is not on the allowed list.');
   }
   accessToken = resp.access_token;
-  saveSession(accessToken, email, resp.expires_in || 3600);
+  tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
+  session = { email, name: info.name || email, picture: info.picture || '' };
+  saveSession();
+  renderUser();
+  scheduleRenewal();
 }
 
-function startApp() {
-  const saved = loadSession();
-  if (saved) {
-    accessToken = saved.token;
-    showApp();
-    refresh();
-    return;
+// Renews the token a few minutes before it expires, silently
+function scheduleRenewal() {
+  clearTimeout(refreshTimer);
+  const delay = Math.max(30, (tokenExpiresAt - Date.now()) / 1000 - 300) * 1000;
+  refreshTimer = setTimeout(renewSilently, delay);
+}
+
+function renewSilently() {
+  connect('').catch(() => { /* keep showing pictures until the token actually expires */ });
+}
+
+// Phones pause timers in the background, so renew again when the page comes back
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && session && accessToken && tokenExpiresAt - Date.now() < 5 * 60 * 1000) {
+    renewSilently();
   }
-  // Try a silent reconnect (works if this browser already approved the app)
-  connectDrive('')
+});
+
+function startApp() {
+  const saved = readSession();
+  if (saved) {
+    session = saved;
+    renderUser();
+    showApp();
+    setCount('Connecting…');
+  }
+  connect('')
     .then(() => { showApp(); refresh(); })
-    .catch(() => showLogin());
+    .catch(() => {
+      if (saved) {
+        // Session exists but Google needs a tap. Show the app with a button to continue.
+        showLogin('Tap below to continue as ' + saved.email + '.');
+      } else {
+        showLogin();
+      }
+    });
 }
 
 function initGoogle() {
@@ -341,26 +409,40 @@ function initGoogle() {
   startApp();
 }
 
-loginBtn.onclick = () => {
+// Button: try silently first. Only if Google needs an approval, ask with the popup
+loginBtn.onclick = async () => {
   loginBtn.disabled = true;
   loginMsg.textContent = '';
-  connectDrive('consent')
-    .then(() => { showApp(); refresh(); })
-    .catch(e => showLogin(e.message === 'popup_closed' ? 'Sign-in was cancelled.' : e.message))
-    .finally(() => { loginBtn.disabled = false; });
+  try {
+    await connect('');
+  } catch (e) {
+    try {
+      await connect('select_account');
+    } catch (e2) {
+      loginMsg.textContent = e2.message === 'popup_closed' ? 'Sign-in was cancelled.' : e2.message;
+      loginBtn.disabled = false;
+      return;
+    }
+  }
+  showApp();
+  refresh();
+  loginBtn.disabled = false;
 };
 
 $('signOutBtn').onclick = () => {
   if (accessToken && google.accounts.oauth2) google.accounts.oauth2.revoke(accessToken);
   accessToken = null;
-  localStorage.removeItem(TOKEN_KEY);
+  session = null;
+  clearTimeout(refreshTimer);
+  localStorage.removeItem(SESSION_KEY);
   photos = [];
   gallery.innerHTML = '';
   countEl.textContent = '';
+  renderUser();
   showLogin('Signed out.');
 };
 
-// Drive request. If the token expired, reconnect silently once and retry
+// Drive request. If the token has expired, renew it silently once and retry
 async function driFetch(url, opts = {}, retry = true) {
   if (!accessToken) throw new Error('Not connected');
   const res = await fetch(url, {
@@ -368,12 +450,11 @@ async function driFetch(url, opts = {}, retry = true) {
     headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + accessToken }
   });
   if (res.status === 401 && retry) {
-    localStorage.removeItem(TOKEN_KEY);
     try {
-      await connectDrive('');
+      await connect('');
     } catch (e) {
       accessToken = null;
-      showLogin('Your session ended. Please sign in again.');
+      showLogin('Your session ended. Tap Sign in with Google.');
       throw e;
     }
     return driFetch(url, opts, false);
@@ -402,13 +483,15 @@ async function listFolder() {
   return files;
 }
 
+function setCount(text) { countEl.textContent = text; }
+
 async function refresh() {
-  countEl.textContent = 'Loading…';
+  setCount('Loading…');
   try {
     photos = await listFolder();
     renderGrid();
   } catch (e) {
-    countEl.textContent = 'Could not load pictures';
+    setCount('Could not load pictures');
     console.error(e);
   }
 }
@@ -437,7 +520,7 @@ async function loadThumb(p, img) {
     if (res.ok) src = URL.createObjectURL(await res.blob());
   } catch (e) {}
   img.onload = () => img.classList.add('ready');
-  img.onerror = () => { img.classList.add('ready'); };
+  img.onerror = () => img.classList.add('ready');
   img.src = src;
 }
 
@@ -458,7 +541,7 @@ function renderGrid() {
 
   if (!photos.length) {
     gallery.innerHTML = '<div class="empty">No pictures found in this folder.</div>';
-    countEl.textContent = '0 pictures';
+    setCount('0 pictures');
     return;
   }
 
@@ -487,7 +570,7 @@ function applySearch() {
     card.hidden = !show;
     if (show) visible++;
   });
-  countEl.textContent = visible + (visible === 1 ? ' picture' : ' pictures');
+  setCount(visible + (visible === 1 ? ' picture' : ' pictures'));
 }
 
 searchEl.addEventListener('input', applySearch);
