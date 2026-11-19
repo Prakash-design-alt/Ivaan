@@ -135,6 +135,15 @@
     opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s;
   }
   .card:hover .cap { opacity: 1; transform: none; }
+  .badge {
+    position: absolute; top: 10px; left: 10px; z-index: 1; width: 34px; height: 34px;
+    border-radius: 50%; background: rgba(0, 0, 0, .55); border: 1px solid var(--line);
+    backdrop-filter: blur(8px); display: grid; place-items: center; pointer-events: none;
+  }
+  .badge::after {
+    content: ''; margin-left: 3px; border-style: solid; border-width: 6px 0 6px 10px;
+    border-color: transparent transparent transparent #fff;
+  }
   .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -157,6 +166,10 @@
   }
   #viewerImg.loading { opacity: .3; }
   #viewerImg.no-anim { transition: none; }
+  #viewerVid {
+    max-width: 92vw; max-height: 84vh; border-radius: 12px; background: #000;
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .9); outline: none;
+  }
 
   .glass {
     position: absolute; z-index: 2; background: rgba(20, 20, 26, .55); color: #fff;
@@ -221,7 +234,7 @@
       </div>
     </div>
     <span id="count" class="count"></span>
-    <input id="search" class="search" type="search" placeholder="Search pictures" autocomplete="off">
+    <input id="search" class="search" type="search" placeholder="Search pictures and videos" autocomplete="off">
     <button id="signOutBtn" class="ghost">Sign out</button>
   </header>
 
@@ -230,6 +243,7 @@
   <div id="viewer">
     <div id="stage">
       <img id="viewerImg" alt="" draggable="false">
+      <video id="viewerVid" controls playsinline preload="metadata" hidden></video>
     </div>
     <button id="closeBtn" class="glass" aria-label="Close">&times;</button>
     <button id="prevBtn" class="glass nav" aria-label="Previous">&#8249;</button>
@@ -267,8 +281,11 @@ const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
 const gallery = $('gallery'), countEl = $('count'), searchEl = $('search');
 const userEl = $('user'), avatarEl = $('avatar'), unameEl = $('uname'), uemailEl = $('uemail');
-const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
+const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg'), viewerVid = $('viewerVid');
+const zoomBar = $('zoomBar');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
+
+const isVideo = p => (p.mimeType || '').startsWith('video/');
 
 // ---- Screens ----
 
@@ -304,7 +321,7 @@ function renderUser() {
 
 let tokenClient = null, accessToken = null, tokenExpiresAt = 0;
 let pendingResolve = null, pendingReject = null;
-let session = null;          // { email, name, picture }
+let session = null;
 let refreshTimer = null;
 let photos = [];
 let currentIndex = -1, viewToken = 0;
@@ -316,7 +333,6 @@ function onTokenResponse(resp) {
   pendingResolve = pendingReject = null;
 }
 
-// prompt '' = silent when possible. login_hint tells Google which account to renew
 function requestToken(prompt) {
   return new Promise((resolve, reject) => {
     pendingResolve = resolve;
@@ -338,7 +354,6 @@ function readSession() {
   } catch (e) { return null; }
 }
 
-// Gets a token, confirms the account is allowed, and keeps the user's name and email
 async function connect(prompt) {
   const resp = await requestToken(prompt);
   const info = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -358,7 +373,12 @@ async function connect(prompt) {
   scheduleRenewal();
 }
 
-// Renews the token a few minutes before it expires, silently
+// Makes sure the token is valid for at least another minute before using it
+async function ensureToken() {
+  if (accessToken && Date.now() < tokenExpiresAt - 60 * 1000) return;
+  await connect('');
+}
+
 function scheduleRenewal() {
   clearTimeout(refreshTimer);
   const delay = Math.max(30, (tokenExpiresAt - Date.now()) / 1000 - 300) * 1000;
@@ -366,10 +386,9 @@ function scheduleRenewal() {
 }
 
 function renewSilently() {
-  connect('').catch(() => { /* keep showing pictures until the token actually expires */ });
+  connect('').catch(() => {});
 }
 
-// Phones pause timers in the background, so renew again when the page comes back
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && session && accessToken && tokenExpiresAt - Date.now() < 5 * 60 * 1000) {
     renewSilently();
@@ -387,12 +406,8 @@ function startApp() {
   connect('')
     .then(() => { showApp(); refresh(); })
     .catch(() => {
-      if (saved) {
-        // Session exists but Google needs a tap. Show the app with a button to continue.
-        showLogin('Tap below to continue as ' + saved.email + '.');
-      } else {
-        showLogin();
-      }
+      if (saved) showLogin('Tap below to continue as ' + saved.email + '.');
+      else showLogin();
     });
 }
 
@@ -410,7 +425,6 @@ function initGoogle() {
   startApp();
 }
 
-// Button: try silently first. Only if Google needs an approval, ask with the popup
 loginBtn.onclick = async () => {
   loginBtn.disabled = true;
   loginMsg.textContent = '';
@@ -443,7 +457,6 @@ $('signOutBtn').onclick = () => {
   showLogin('Signed out.');
 };
 
-// Drive request. If the token has expired, renew it silently once and retry
 async function driFetch(url, opts = {}, retry = true) {
   if (!accessToken) throw new Error('Not connected');
   const res = await fetch(url, {
@@ -464,14 +477,14 @@ async function driFetch(url, opts = {}, retry = true) {
   return res;
 }
 
-// ---- Listing ----
+// ---- Listing (pictures and videos) ----
 
 async function listFolder() {
   const files = [];
   let pageToken = '';
   do {
     const params = new URLSearchParams({
-      q: `'${FOLDER_ID}' in parents and mimeType contains 'image/' and trashed = false`,
+      q: `'${FOLDER_ID}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
       fields: 'nextPageToken,files(id,name,mimeType,thumbnailLink)',
       pageSize: '1000',
       orderBy: 'name'
@@ -511,7 +524,6 @@ function pump() {
   }
 }
 
-// Loads a thumbnail with the access token. If that fails, uses the public link directly
 async function loadThumb(p, img) {
   if (!p.thumbnailLink) { img.classList.add('ready'); return; }
   const url = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
@@ -541,8 +553,8 @@ function renderGrid() {
   gallery.innerHTML = '';
 
   if (!photos.length) {
-    gallery.innerHTML = '<div class="empty">No pictures found in this folder.</div>';
-    setCount('0 pictures');
+    gallery.innerHTML = '<div class="empty">No pictures or videos found in this folder.</div>';
+    setCount('0 items');
     return;
   }
 
@@ -553,6 +565,11 @@ function renderGrid() {
     card.style.animationDelay = Math.min(i, 30) * 25 + 'ms';
     card.innerHTML = '<img alt=""><div class="cap"></div>';
     card.querySelector('.cap').textContent = p.name;
+    if (isVideo(p)) {
+      const b = document.createElement('span');
+      b.className = 'badge';
+      card.appendChild(b);
+    }
     card.onclick = () => openImage(indexOf(p.id));
     gallery.appendChild(card);
     io.observe(card);
@@ -571,7 +588,7 @@ function applySearch() {
     card.hidden = !show;
     if (show) visible++;
   });
-  setCount(visible + (visible === 1 ? ' picture' : ' pictures'));
+  setCount(visible + (visible === 1 ? ' item' : ' items'));
 }
 
 searchEl.addEventListener('input', applySearch);
@@ -594,7 +611,12 @@ function fullUrl(id) {
   return fullCache.get(id);
 }
 
-// ---- Zoom and pan ----
+// Videos stream straight from Drive, so large files start playing without downloading first
+function videoUrl(id) {
+  return `https://www.googleapis.com/drive/v3/files/${id}?alt=media&access_token=${encodeURIComponent(accessToken)}`;
+}
+
+// ---- Zoom and pan (pictures only) ----
 
 let zoom = 1, panX = 0, panY = 0;
 
@@ -631,7 +653,7 @@ $('zoomOutBtn').onclick = e => { e.stopPropagation(); setZoom(zoom - ZOOM_STEP);
 $('zoomResetBtn').onclick = e => { e.stopPropagation(); resetZoom(); };
 
 stage.addEventListener('wheel', e => {
-  if (!viewer.classList.contains('show')) return;
+  if (!viewer.classList.contains('show') || viewerImg.hidden) return;
   e.preventDefault();
   setZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
 }, { passive: false });
@@ -639,7 +661,7 @@ stage.addEventListener('wheel', e => {
 let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
 
 stage.addEventListener('mousedown', e => {
-  if (zoom <= 1) return;
+  if (zoom <= 1 || viewerImg.hidden) return;
   dragging = true;
   dragStartX = e.clientX; dragStartY = e.clientY;
   panStartX = panX; panStartY = panY;
@@ -661,12 +683,19 @@ window.addEventListener('mouseup', () => {
 });
 
 stage.addEventListener('dblclick', () => {
+  if (viewerImg.hidden) return;
   if (zoom > 1) resetZoom(); else setZoom(2.5);
 });
 
 // ---- Viewer ----
 
 const wrap = (i, total) => ((i % total) + total) % total;
+
+function stopVideo() {
+  viewerVid.pause();
+  viewerVid.removeAttribute('src');
+  viewerVid.load();
+}
 
 async function openImage(index) {
   const total = photos.length;
@@ -675,28 +704,49 @@ async function openImage(index) {
   currentIndex = index;
   const token = ++viewToken;
   const p = photos[index];
+  const video = isVideo(p);
 
   viewer.classList.add('show');
-  viewerImg.classList.add('loading');
-  viewerImg.removeAttribute('src');
-  resetZoom();
   counterEl.textContent = (index + 1) + ' / ' + total + '   ·   ' + p.name;
   prevBtn.disabled = nextBtn.disabled = total < 2;
+  stopVideo();
+  resetZoom();
 
-  try {
-    const url = await fullUrl(p.id);
-    if (token !== viewToken) return;
-    viewerImg.src = url;
-  } catch (e) {
-    if (token !== viewToken) return;
-    counterEl.textContent = 'Could not open ' + p.name;
-  } finally {
-    if (token === viewToken) viewerImg.classList.remove('loading');
+  if (video) {
+    viewerImg.hidden = true;
+    zoomBar.hidden = true;
+    viewerVid.hidden = false;
+    try {
+      await ensureToken();
+      if (token !== viewToken) return;
+      viewerVid.src = videoUrl(p.id);
+    } catch (e) {
+      if (token !== viewToken) return;
+      counterEl.textContent = 'Could not play ' + p.name;
+    }
+  } else {
+    viewerVid.hidden = true;
+    viewerImg.hidden = false;
+    zoomBar.hidden = false;
+    viewerImg.classList.add('loading');
+    viewerImg.removeAttribute('src');
+    try {
+      const url = await fullUrl(p.id);
+      if (token !== viewToken) return;
+      viewerImg.src = url;
+    } catch (e) {
+      if (token !== viewToken) return;
+      counterEl.textContent = 'Could not open ' + p.name;
+    } finally {
+      if (token === viewToken) viewerImg.classList.remove('loading');
+    }
   }
 
+  // Preload the neighbouring pictures (videos stream, so they're not preloaded)
   if (total > 1) {
     [index + 1, index - 1].forEach(j => {
-      fullUrl(photos[wrap(j, total)].id).catch(() => {});
+      const q = photos[wrap(j, total)];
+      if (!isVideo(q)) fullUrl(q.id).catch(() => {});
     });
   }
 }
@@ -709,6 +759,7 @@ function closeViewer() {
   dragging = false;
   viewer.classList.remove('show');
   viewerImg.removeAttribute('src');
+  stopVideo();
   currentIndex = -1;
   resetZoom();
 }
@@ -739,7 +790,7 @@ stage.addEventListener('touchstart', e => {
 }, { passive: true });
 
 stage.addEventListener('touchmove', e => {
-  if (zoom <= 1 || e.touches.length !== 1 || touchStartX === null) return;
+  if (zoom <= 1 || viewerImg.hidden || e.touches.length !== 1 || touchStartX === null) return;
   e.preventDefault();
   panX = touchPanStartX + (e.touches[0].clientX - touchStartX);
   panY = touchPanStartY + (e.touches[0].clientY - touchStartY);
@@ -752,7 +803,8 @@ stage.addEventListener('touchend', e => {
   touchStartX = null;
   if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNext() : showPrev();
 });
-// On iPhone Safari, offer a button that opens this page in Chrome
+
+// Chrome-on-iPhone button (shown only in iPhone Safari)
 (function () {
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/.test(ua);
@@ -763,7 +815,7 @@ stage.addEventListener('touchend', e => {
     a.hidden = false;
   }
 })();
-  
+
 initGoogle();
 </script>
 </body>
