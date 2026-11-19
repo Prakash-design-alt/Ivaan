@@ -14,6 +14,7 @@
     --muted: #8b90a0;
     --accent: #7c5cff;
     --accent2: #22d3ee;
+    --danger: #ef4444;
   }
   [hidden] { display: none !important; }
   * { box-sizing: border-box; }
@@ -96,6 +97,13 @@
   .tabs button:hover { color: #fff; }
   .tabs button.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
 
+  .upl {
+    border: none; border-radius: 999px; padding: 9px 16px; cursor: pointer; font: inherit; font-size: 13px;
+    font-weight: 600; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    transition: transform .15s, box-shadow .2s;
+  }
+  .upl:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(124, 92, 255, .7); }
+
   .search {
     margin-left: auto; width: min(260px, 30vw); padding: 10px 14px 10px 36px;
     border-radius: 999px; border: 1px solid var(--line); background-color: rgba(255, 255, 255, .04);
@@ -118,7 +126,7 @@
   .sec .n { font-size: 13px; color: var(--muted); }
   .sec .line { flex: 1; height: 1px; background: var(--line); margin-left: 8px; }
 
-  /* ---------- Photo grid (portrait cards) ---------- */
+  /* ---------- Photo grid ---------- */
   .grid {
     display: grid; gap: 18px; padding: 0 22px 20px;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -153,7 +161,7 @@
   }
   .card:hover .cap { opacity: 1; transform: none; }
 
-  /* ---------- Video grid (wide cards) ---------- */
+  /* ---------- Video grid ---------- */
   .vgrid {
     display: grid; gap: 16px; padding: 0 22px 20px;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -195,6 +203,16 @@
     background: rgba(0, 0, 0, .65); font-variant-numeric: tabular-nums;
   }
 
+  /* ---------- Delete buttons (admin only) ---------- */
+  .del {
+    position: absolute; top: 10px; right: 10px; z-index: 3; width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(0, 0, 0, .6); color: #fff; font-size: 14px; line-height: 1;
+    cursor: pointer; display: grid; place-items: center; opacity: 0; transition: opacity .2s, background .2s;
+  }
+  .card:hover .del, .vcard:hover .del, .del:focus { opacity: 1; }
+  .del:hover { background: var(--danger); }
+  @media (hover: none) { .del { opacity: 1; } }
+
   .status { text-align: center; color: var(--muted); padding: 60px 22px; font-size: 14px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
@@ -225,6 +243,11 @@
   }
   .glass:hover { background: rgba(255, 255, 255, .15); }
   #closeBtn { top: 16px; right: 16px; width: 44px; height: 44px; border-radius: 50%; font-size: 26px; line-height: 1; cursor: pointer; }
+  #pvDel {
+    top: 16px; left: 16px; height: 44px; padding: 0 16px; border-radius: 999px;
+    font: inherit; font-size: 13px; color: #fca5a5; cursor: pointer;
+  }
+  #pvDel:hover { background: rgba(239, 68, 68, .35); }
   .nav {
     top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%;
     font-size: 30px; line-height: 1; cursor: pointer;
@@ -255,9 +278,7 @@
     width: min(960px, 100%); background: #0b0b10; border: 1px solid var(--line); border-radius: 22px;
     overflow: hidden; box-shadow: 0 40px 100px -20px rgba(0, 0, 0, .9); animation: rise .35s both;
   }
-  .vv-head {
-    display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line);
-  }
+  .vv-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
   .vv-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .vv-count { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .vv-btn {
@@ -267,6 +288,11 @@
   }
   .vv-btn:hover { background: rgba(255, 255, 255, .16); }
   .vv-btn:disabled { opacity: .3; cursor: default; }
+  .vv-del {
+    height: 38px; padding: 0 14px; border-radius: 999px; flex: none; border: 1px solid var(--line);
+    background: rgba(255, 255, 255, .06); color: #fca5a5; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .vv-del:hover { background: rgba(239, 68, 68, .3); color: #fff; }
   .vv-video { display: block; width: 100%; max-height: 72vh; background: #000; }
   .vv-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; }
   .vv-status { font-size: 13px; color: var(--muted); }
@@ -277,12 +303,14 @@
     .user { width: 100%; order: -1; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
     .brand { font-size: 16px; }
     .tabs { order: 2; }
+    .upl { order: 2; }
     .search { order: 3; width: 100%; margin-left: 0; }
     .sec { padding: 20px 14px 10px; }
     .grid { padding: 0 12px 16px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .vgrid { padding: 0 12px 16px; gap: 12px; grid-template-columns: 1fr; }
     .nav { width: 42px; height: 42px; font-size: 24px; }
     #prevBtn { left: 6px; } #nextBtn { right: 6px; }
+    #pvDel { top: 12px; left: 12px; }
     #videoViewer { padding: 10px; }
     .vv-panel { border-radius: 16px; }
   }
@@ -315,6 +343,8 @@
       <button data-f="photos" class="on">Photos</button>
       <button data-f="videos">Videos</button>
     </div>
+    <button id="uploadBtn" class="upl" hidden>Upload</button>
+    <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden>
     <input id="search" class="search" type="search" placeholder="Search" autocomplete="off">
     <button id="signOutBtn" class="ghost">Sign out</button>
   </header>
@@ -338,6 +368,7 @@
     <div id="stage">
       <img id="viewerImg" alt="" draggable="false">
     </div>
+    <button id="pvDel" class="glass" hidden>Delete</button>
     <button id="closeBtn" class="glass" aria-label="Close">&times;</button>
     <button id="prevBtn" class="glass nav" aria-label="Previous">&#8249;</button>
     <button id="nextBtn" class="glass nav" aria-label="Next">&#8250;</button>
@@ -356,6 +387,7 @@
       <div class="vv-head">
         <div id="vvTitle" class="vv-title"></div>
         <span id="vvCount" class="vv-count"></span>
+        <button id="vvDel" class="vv-del" hidden>Delete</button>
         <button id="vvClose" class="vv-btn" aria-label="Close">&times;</button>
       </div>
       <video id="vvVideo" class="vv-video" controls playsinline preload="auto"></video>
@@ -380,7 +412,11 @@ const ALLOWED_EMAILS = [
   'prakashbudhathoki3333@gmail.com',
   'kawarlila26@gmail.com'
 ];
-const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.readonly';
+// Only this account can upload and delete
+const ADMIN_EMAIL = '1.prakashbudhathoki@gmail.com';
+
+// Full Drive access is needed for upload and trash
+const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive';
 const SESSION_KEY = 'gallery_session';
 const THUMB_PX = 480;
 const MAX_PARALLEL_THUMBS = 6;
@@ -393,18 +429,22 @@ const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
 const userEl = $('user'), avatarEl = $('avatar'), unameEl = $('uname'), uemailEl = $('uemail');
 const searchEl = $('search');
+const uploadBtn = $('uploadBtn'), fileInput = $('fileInput');
 const photosSection = $('photosSection'), videosSection = $('videosSection');
 const photoGrid = $('photoGrid'), videoGrid = $('videoGrid'), emptyEl = $('empty');
 const photoCountEl = $('photoCount'), videoCountEl = $('videoCount');
 
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
+const pvDel = $('pvDel');
 
 const videoViewer = $('videoViewer'), vvVideo = $('vvVideo'), vvTitle = $('vvTitle');
 const vvCount = $('vvCount'), vvStatus = $('vvStatus'), vvPrev = $('vvPrev'), vvNext = $('vvNext');
+const vvDel = $('vvDel');
 
 const isVideo = p => (p.mimeType || '').startsWith('video/');
 const wrap = (i, total) => ((i % total) + total) % total;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---- State ----
 
@@ -415,6 +455,8 @@ let photos = [], picList = [], vidList = [], byId = new Map();
 let currentIndex = -1, viewToken = 0;
 let vIndex = -1, vToken = 0, vidObjUrl = null;
 let filter = 'photos';
+
+const isAdmin = () => !!session && session.email === ADMIN_EMAIL;
 
 // ---- Screens and status ----
 
@@ -435,6 +477,7 @@ function setStatus(text) {
 }
 
 function renderUser() {
+  uploadBtn.hidden = !isAdmin();
   if (!session) { userEl.hidden = true; return; }
   userEl.hidden = false;
   unameEl.textContent = session.name || session.email;
@@ -630,6 +673,79 @@ async function refresh() {
   }
 }
 
+// ---- Upload (admin only) ----
+
+async function uploadFile(f) {
+  const boundary = 'gal' + Date.now();
+  const meta = { name: f.name, parents: [FOLDER_ID] };
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
+    `--${boundary}\r\nContent-Type: ${f.type || 'application/octet-stream'}\r\n\r\n`,
+    f,
+    `\r\n--${boundary}--`
+  ]);
+  await driFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+}
+
+uploadBtn.onclick = () => {
+  if (!isAdmin()) return;
+  fileInput.click();
+};
+
+fileInput.onchange = async () => {
+  const files = [...fileInput.files];
+  if (!files.length || !isAdmin()) return;
+  let ok = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    setStatus(`Uploading ${f.name} (${i + 1} of ${files.length})…`);
+    try {
+      await uploadFile(f);
+      ok++;
+    } catch (e) {
+      setStatus(`Failed: ${f.name} (${e.message})`);
+      await sleep(1500);
+    }
+  }
+  fileInput.value = '';
+  setStatus(`Uploaded ${ok} of ${files.length}. Refreshing…`);
+  await refresh();
+};
+
+// ---- Delete (admin only): moves the file to Drive Trash, which can be restored ----
+
+async function deleteItem(p) {
+  if (!isAdmin()) return;
+  if (!confirm(`Move "${p.name}" to Drive Trash?`)) return;
+  setStatus(`Deleting ${p.name}…`);
+  try {
+    await driFetch(`https://www.googleapis.com/drive/v3/files/${p.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    });
+    photos = photos.filter(x => x.id !== p.id);
+    renderGrids();
+  } catch (e) {
+    setStatus('Delete failed: ' + e.message);
+  }
+}
+
+function attachDelete(card, p) {
+  if (!isAdmin()) return;
+  const b = document.createElement('button');
+  b.className = 'del';
+  b.title = 'Move to trash';
+  b.setAttribute('aria-label', 'Delete');
+  b.textContent = '✕';
+  b.onclick = e => { e.stopPropagation(); deleteItem(p); };
+  card.appendChild(b);
+}
+
 // ---- Thumbnails ----
 
 const queue = [];
@@ -693,6 +809,7 @@ function renderGrids() {
     card.innerHTML = '<img alt=""><div class="cap"></div>';
     card.querySelector('.cap').textContent = p.name;
     card.onclick = () => openPhoto(i);
+    attachDelete(card, p);
     photoGrid.appendChild(card);
     io.observe(card);
   });
@@ -713,6 +830,7 @@ function renderGrids() {
     card.querySelector('.vname').textContent = p.name;
     card.querySelector('.dur').textContent = fmtDuration(p.videoMediaMetadata && p.videoMediaMetadata.durationMillis);
     card.onclick = () => openVideo(i);
+    attachDelete(card, p);
     videoGrid.appendChild(card);
     io.observe(card);
   });
@@ -856,6 +974,7 @@ async function openPhoto(index) {
   viewerImg.classList.add('loading');
   viewerImg.removeAttribute('src');
   resetZoom();
+  pvDel.hidden = !isAdmin();
   counterEl.textContent = (index + 1) + ' / ' + total + '   ·   ' + p.name;
   prevBtn.disabled = nextBtn.disabled = total < 2;
 
@@ -888,6 +1007,14 @@ function closePhoto() {
   currentIndex = -1;
   resetZoom();
 }
+
+pvDel.onclick = e => {
+  e.stopPropagation();
+  const p = picList[currentIndex];
+  if (!p) return;
+  closePhoto();
+  deleteItem(p);
+};
 
 $('closeBtn').onclick = closePhoto;
 prevBtn.onclick = e => { e.stopPropagation(); showPrevPhoto(); };
@@ -938,6 +1065,7 @@ async function openVideo(index) {
   vvTitle.textContent = p.name;
   vvCount.textContent = (vIndex + 1) + ' / ' + total;
   vvPrev.disabled = vvNext.disabled = total < 2;
+  vvDel.hidden = !isAdmin();
   vvStatus.textContent = 'Loading video…';
   stopVideo();
 
@@ -969,6 +1097,13 @@ function closeVideo() {
   stopVideo();
   videoViewer.classList.remove('show');
 }
+
+vvDel.onclick = () => {
+  const p = vidList[vIndex];
+  if (!p) return;
+  closeVideo();
+  deleteItem(p);
+};
 
 $('vvClose').onclick = closeVideo;
 vvPrev.onclick = showPrevVideo;
