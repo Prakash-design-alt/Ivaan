@@ -1,96 +1,243 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Family Picture Gallery</title>
+<title>Family Gallery</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; background: #111; color: #eee; }
-  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px;
-           align-items: center; padding: 12px 16px; background: #1c1c1c; }
-  button { padding: 8px 14px; border: none; border-radius: 6px; background: #3b82f6; color: #fff; cursor: pointer; }
-  button:hover { background: #2563eb; }
-  button:disabled { opacity: .4; cursor: default; background: #3b82f6; }
-  #status { font-size: 14px; opacity: .8; }
-  #signOutBtn { margin-left: auto; background: #444; }
-  #signOutBtn:hover { background: #555; }
-  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; padding: 16px; }
-  .card { background: #222; border-radius: 8px; overflow: hidden; cursor: pointer; }
-  .card img { width: 100%; height: 240px; object-fit: contain; display: block; background: #333; }
-  .card span { display: block; padding: 6px 8px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #connectBtn[hidden] { display: none; }
+  :root {
+    --bg: #050507;
+    --panel: rgba(18, 18, 24, .72);
+    --line: rgba(255, 255, 255, .08);
+    --text: #eef0f5;
+    --muted: #8b90a0;
+    --accent: #7c5cff;
+    --accent2: #22d3ee;
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; }
 
-  #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
-            align-items: center; justify-content: center; z-index: 10; touch-action: none; overflow: hidden; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:
+      radial-gradient(1000px 600px at 0% -10%, rgba(124, 92, 255, .16), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(34, 211, 238, .10), transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+
+  /* ---------- Login ---------- */
+  #login { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+  .login-card {
+    width: min(400px, 100%); text-align: center; padding: 44px 36px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 24px;
+    backdrop-filter: blur(20px); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8);
+    animation: rise .6s both;
+  }
+  .logo {
+    width: 64px; height: 64px; margin: 0 auto 22px; border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid; place-items: center; font-size: 28px; font-weight: 800;
+    box-shadow: 0 10px 30px -6px rgba(124, 92, 255, .6);
+  }
+  .login-card h1 { margin: 0 0 8px; font-size: 24px; font-weight: 700; }
+  .login-card p { margin: 0 0 28px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  #loginMsg { margin-top: 18px; min-height: 20px; font-size: 13px; color: #fca5a5; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    border: none; border-radius: 999px; padding: 12px 22px; cursor: pointer;
+    font: inherit; font-weight: 600; color: #fff; background: var(--accent);
+    transition: transform .15s, background .2s, box-shadow .2s, opacity .2s;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px rgba(124, 92, 255, .7); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
+  .btn-google { background: #fff; color: #111; width: 100%; }
+  .btn-google:hover { box-shadow: 0 10px 24px -8px rgba(255, 255, 255, .35); }
+  .gdot {
+    width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0);
+  }
+  .gdot::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+
+  /* ---------- Top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px;
+    padding: 14px 22px; background: rgba(5, 5, 7, .7); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-weight: 800; font-size: 18px; letter-spacing: .3px;
+    background: linear-gradient(90deg, #fff, #c4b5fd, #67e8f9);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .count { font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .search {
+    margin-left: auto; width: min(340px, 40vw); padding: 10px 14px 10px 36px;
+    border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04);
+    color: var(--text); font: inherit; font-size: 14px; outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b90a0' stroke-width='2'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='M11 11l4 4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: 12px center;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .search:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124, 92, 255, .2); }
+  .ghost {
+    background: rgba(255, 255, 255, .06); color: var(--muted); border: 1px solid var(--line);
+    padding: 9px 16px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer;
+    transition: color .2s, background .2s;
+  }
+  .ghost:hover { color: #fff; background: rgba(255, 255, 255, .12); }
+
+  /* ---------- Grid ---------- */
+  main {
+    display: grid; gap: 18px; padding: 24px 22px 60px;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+  .card {
+    position: relative; aspect-ratio: 4 / 5; overflow: hidden; cursor: pointer;
+    border-radius: 18px; background: #0d0d12; border: 1px solid var(--line);
+    animation: rise .5s both;
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1), box-shadow .3s, border-color .3s;
+  }
+  .card:hover {
+    transform: translateY(-5px); border-color: rgba(124, 92, 255, .55);
+    box-shadow: 0 22px 44px -16px rgba(124, 92, 255, .5);
+  }
+  .card img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    opacity: 0; transition: opacity .5s, transform .6s cubic-bezier(.2, .8, .2, 1);
+  }
+  .card img.ready { opacity: 1; }
+  .card:hover img.ready { transform: scale(1.06); }
+  .card::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, .06) 50%, transparent 60%);
+    background-size: 250% 100%; animation: shimmer 1.6s infinite;
+  }
+  .card.ready::after { display: none; }
+  .card .cap {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 36px 14px 12px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, .9));
+    font-size: 12px; color: #e5e7eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s;
+  }
+  .card:hover .cap { opacity: 1; transform: none; }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+
+  /* ---------- Viewer ---------- */
+  #viewer {
+    position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .94); backdrop-filter: blur(10px); touch-action: none; overflow: hidden;
+    animation: fade .25s both;
+  }
   #viewer.show { display: flex; }
-  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-           overflow: hidden; cursor: grab; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: grab; }
   #stage.dragging { cursor: grabbing; }
-  #viewerImg { max-width: 90vw; max-height: 88vh; border-radius: 4px; transition: opacity .15s, transform .15s;
-               transform-origin: center center; user-select: none; -webkit-user-drag: none; }
-  #viewerImg.loading { opacity: .35; }
+  #viewerImg {
+    max-width: 90vw; max-height: 86vh; border-radius: 12px; user-select: none; -webkit-user-drag: none;
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .9);
+    transform-origin: center center; transition: opacity .2s, transform .2s;
+  }
+  #viewerImg.loading { opacity: .3; }
   #viewerImg.no-anim { transition: none; }
-  #closeBtn { position: absolute; top: 12px; right: 16px; background: none; font-size: 32px; color: #fff; padding: 0 8px; z-index: 2; }
-  #closeBtn:hover { background: none; color: #ccc; }
-  .nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,.5);
-         color: #fff; font-size: 36px; line-height: 1; padding: 10px 16px; border-radius: 8px; z-index: 2; }
-  .nav:hover { background: rgba(0,0,0,.8); }
-  #prevBtn { left: 12px; }
-  #nextBtn { right: 12px; }
-  #counter { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
-             font-size: 14px; color: #ddd; background: rgba(0,0,0,.5); padding: 4px 10px; border-radius: 6px; z-index: 2; }
-  #zoomBar { position: absolute; bottom: 14px; right: 16px; display: flex; gap: 6px; align-items: center; z-index: 2; }
-  #zoomBar button { padding: 6px 12px; font-size: 18px; line-height: 1; background: rgba(0,0,0,.6); }
-  #zoomBar button:hover { background: rgba(0,0,0,.85); }
-  #zoomLabel { font-size: 13px; color: #ddd; background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 6px; min-width: 52px; text-align: center; }
+
+  .glass {
+    position: absolute; z-index: 2; background: rgba(20, 20, 26, .55); color: #fff;
+    border: 1px solid var(--line); backdrop-filter: blur(12px);
+    transition: background .2s, transform .2s;
+  }
+  .glass:hover { background: rgba(255, 255, 255, .15); }
+  #closeBtn { top: 16px; right: 16px; width: 44px; height: 44px; border-radius: 50%; font-size: 26px; line-height: 1; cursor: pointer; }
+  .nav {
+    top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%;
+    font-size: 30px; line-height: 1; cursor: pointer;
+  }
+  .nav:hover { transform: translateY(-50%) scale(1.06); }
+  .nav:disabled { opacity: .3; cursor: default; }
+  #prevBtn { left: 18px; }
+  #nextBtn { right: 18px; }
+  #counter {
+    bottom: 22px; left: 50%; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px;
+    font-size: 13px; color: #e5e7eb; white-space: nowrap; max-width: 80vw; overflow: hidden; text-overflow: ellipsis;
+  }
+  #zoomBar {
+    bottom: 22px; right: 18px; display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 999px;
+  }
+  #zoomBar button {
+    background: transparent; border: none; color: #fff; height: 34px; min-width: 34px; border-radius: 999px;
+    font: inherit; font-size: 16px; cursor: pointer; padding: 0 10px;
+  }
+  #zoomBar button:hover { background: rgba(255, 255, 255, .12); }
+  #zoomLabel { font-size: 13px; color: #cbd5e1; min-width: 50px; text-align: center; }
+
+  @media (max-width: 640px) {
+    .topbar { flex-wrap: wrap; padding: 12px 14px; }
+    .search { order: 3; width: 100%; margin-left: 0; }
+    main { padding: 16px 12px 40px; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .nav { width: 42px; height: 42px; font-size: 24px; }
+    #prevBtn { left: 6px; } #nextBtn { right: 6px; }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <input type="file" id="fileInput" accept="image/*" multiple>
-  <button id="uploadBtn">Upload</button>
-  <button id="connectBtn" hidden>Connect Drive</button>
-  <span id="status">Connecting...</span>
-  <button id="signOutBtn">Sign out</button>
-</header>
-
-<main id="gallery"></main>
-
-<div id="viewer">
-  <div id="stage">
-    <img id="viewerImg" alt="" draggable="false">
+<section id="login" hidden>
+  <div class="login-card">
+    <div class="logo">F</div>
+    <h1>Family Gallery</h1>
+    <p>Sign in with an approved Google account to view the pictures.</p>
+    <button id="loginBtn" class="btn btn-google"><span class="gdot"></span>Sign in with Google</button>
+    <div id="loginMsg"></div>
   </div>
-  <button id="closeBtn" aria-label="Close">&times;</button>
-  <button id="prevBtn" class="nav" aria-label="Previous">&#8249;</button>
-  <button id="nextBtn" class="nav" aria-label="Next">&#8250;</button>
-  <div id="counter"></div>
-  <div id="zoomBar">
-    <button id="zoomOutBtn" aria-label="Zoom out">&minus;</button>
-    <span id="zoomLabel">100%</span>
-    <button id="zoomInBtn" aria-label="Zoom in">+</button>
-    <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
+</section>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <div class="brand">Family Gallery</div>
+    <span id="count" class="count"></span>
+    <input id="search" class="search" type="search" placeholder="Search pictures" autocomplete="off">
+    <button id="signOutBtn" class="ghost">Sign out</button>
+  </header>
+
+  <main id="gallery"></main>
+
+  <div id="viewer">
+    <div id="stage">
+      <img id="viewerImg" alt="" draggable="false">
+    </div>
+    <button id="closeBtn" class="glass" aria-label="Close">&times;</button>
+    <button id="prevBtn" class="glass nav" aria-label="Previous">&#8249;</button>
+    <button id="nextBtn" class="glass nav" aria-label="Next">&#8250;</button>
+    <div id="counter" class="glass"></div>
+    <div id="zoomBar" class="glass">
+      <button id="zoomOutBtn" aria-label="Zoom out">&minus;</button>
+      <span id="zoomLabel">100%</span>
+      <button id="zoomInBtn" aria-label="Zoom in">+</button>
+      <button id="zoomResetBtn" aria-label="Reset zoom">Reset</button>
+    </div>
   </div>
 </div>
 
 <script>
 // ---- Configuration ----
 
-// OAuth Web client ID from Google Cloud → Credentials (see setup steps)
 const CLIENT_ID = '795538288432-j0vgiqrleod5ui7p41hfajdenqvj186f.apps.googleusercontent.com';
-// Google Drive folder "Ivaan Memories"
 const FOLDER_ID = '1Jup9dXbKyytJbHl8pLis6kZBK-tOTS6Y';
-
 const ALLOWED_EMAILS = [
   '1.prakashbudhathoki@gmail.com',
   'prakashbudhathoki3333@gmail.com',
   'kawarlila26@gmail.com'
 ];
-
-const SCOPES = 'openid email https://www.googleapis.com/auth/drive';
+const SCOPES = 'openid email https://www.googleapis.com/auth/drive.readonly';
 const TOKEN_KEY = 'gallery_token';
-const THUMB_PX = 400;
+const THUMB_PX = 480;
 const MAX_PARALLEL_THUMBS = 6;
 const FULL_CACHE_MAX = 20;
 const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
@@ -98,31 +245,38 @@ const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
 // ---- Elements ----
 
 const $ = id => document.getElementById(id);
-const gallery = $('gallery'), statusEl = $('status'), connectBtn = $('connectBtn');
+const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
+const gallery = $('gallery'), countEl = $('count'), searchEl = $('search');
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
-const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn');
-const zoomLabel = $('zoomLabel');
+const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
 
-function setStatus(t) { statusEl.textContent = t; }
+// ---- Screens ----
 
-// ---- Connection (Google Identity Services) ----
-
-let tokenClient = null;
-let accessToken = null;
-let pendingResolve = null, pendingReject = null;
-let photos = [];
-let currentIndex = -1;
-let viewToken = 0;
-
-function onTokenResponse(resp) {
-  if (pendingResolve) {
-    if (resp.error) pendingReject(new Error(resp.error));
-    else pendingResolve(resp);
-    pendingResolve = pendingReject = null;
-  }
+function showLogin(msg = '') {
+  appEl.hidden = true;
+  loginEl.hidden = false;
+  loginMsg.textContent = msg;
 }
 
-// Asks Google for a token. prompt '' tries silently first; 'consent' shows the approval popup
+function showApp() {
+  loginEl.hidden = true;
+  appEl.hidden = false;
+}
+
+// ---- Google sign-in (Google Identity Services) ----
+
+let tokenClient = null, accessToken = null;
+let pendingResolve = null, pendingReject = null;
+let photos = [];
+let currentIndex = -1, viewToken = 0;
+
+function onTokenResponse(resp) {
+  if (!pendingResolve) return;
+  if (resp.error) pendingReject(new Error(resp.error));
+  else pendingResolve(resp);
+  pendingResolve = pendingReject = null;
+}
+
 function requestToken(prompt) {
   return new Promise((resolve, reject) => {
     pendingResolve = resolve;
@@ -131,52 +285,46 @@ function requestToken(prompt) {
   });
 }
 
-function saveToken(token, email, expiresIn) {
+function saveSession(token, email, expiresIn) {
   try {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({
-      token, email, exp: Date.now() + expiresIn * 1000
-    }));
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, email, exp: Date.now() + expiresIn * 1000 }));
   } catch (e) {}
 }
 
-function loadSavedToken() {
+function loadSession() {
   try {
     const s = JSON.parse(localStorage.getItem(TOKEN_KEY));
-    if (s && s.exp - Date.now() > 60 * 1000) return s;
+    if (s && s.exp - Date.now() > 60 * 1000 && ALLOWED_EMAILS.includes(s.email)) return s;
   } catch (e) {}
   return null;
 }
 
-// Gets a token, checks the email against the allowed list, and saves the session
 async function connectDrive(prompt) {
   const resp = await requestToken(prompt);
-  accessToken = resp.access_token;
   const info = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: 'Bearer ' + accessToken }
+    headers: { Authorization: 'Bearer ' + resp.access_token }
   })).json();
   const email = (info.email || '').toLowerCase();
   if (!ALLOWED_EMAILS.includes(email)) {
-    accessToken = null;
     localStorage.removeItem(TOKEN_KEY);
     throw new Error('This account is not on the allowed list.');
   }
-  saveToken(accessToken, email, resp.expires_in || 3600);
-  connectBtn.hidden = true;
+  accessToken = resp.access_token;
+  saveSession(accessToken, email, resp.expires_in || 3600);
 }
 
 function startApp() {
-  const saved = loadSavedToken();
-  if (saved && ALLOWED_EMAILS.includes(saved.email)) {
+  const saved = loadSession();
+  if (saved) {
     accessToken = saved.token;
-    connectBtn.hidden = true;
+    showApp();
     refresh();
     return;
   }
-  // No valid saved session: try to reconnect silently, otherwise show the button
-  connectDrive('').then(refresh).catch(() => {
-    connectBtn.hidden = false;
-    setStatus('Click Connect Drive to load pictures');
-  });
+  // Try a silent reconnect (works if this browser already approved the app)
+  connectDrive('')
+    .then(() => { showApp(); refresh(); })
+    .catch(() => showLogin());
 }
 
 function initGoogle() {
@@ -193,11 +341,13 @@ function initGoogle() {
   startApp();
 }
 
-connectBtn.onclick = () => {
-  setStatus('Connecting...');
+loginBtn.onclick = () => {
+  loginBtn.disabled = true;
+  loginMsg.textContent = '';
   connectDrive('consent')
-    .then(refresh)
-    .catch(e => setStatus(e.message));
+    .then(() => { showApp(); refresh(); })
+    .catch(e => showLogin(e.message === 'popup_closed' ? 'Sign-in was cancelled.' : e.message))
+    .finally(() => { loginBtn.disabled = false; });
 };
 
 $('signOutBtn').onclick = () => {
@@ -206,20 +356,26 @@ $('signOutBtn').onclick = () => {
   localStorage.removeItem(TOKEN_KEY);
   photos = [];
   gallery.innerHTML = '';
-  connectBtn.hidden = false;
-  setStatus('Signed out. Click Connect Drive to sign in again.');
+  countEl.textContent = '';
+  showLogin('Signed out.');
 };
 
-// Call Drive. If the token expired, reconnect once and retry
+// Drive request. If the token expired, reconnect silently once and retry
 async function driFetch(url, opts = {}, retry = true) {
-  if (!accessToken) throw new Error('Drive not connected');
+  if (!accessToken) throw new Error('Not connected');
   const res = await fetch(url, {
     ...opts,
     headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + accessToken }
   });
   if (res.status === 401 && retry) {
     localStorage.removeItem(TOKEN_KEY);
-    await connectDrive('');
+    try {
+      await connectDrive('');
+    } catch (e) {
+      accessToken = null;
+      showLogin('Your session ended. Please sign in again.');
+      throw e;
+    }
     return driFetch(url, opts, false);
   }
   if (!res.ok) throw new Error('Drive error ' + res.status);
@@ -247,25 +403,22 @@ async function listFolder() {
 }
 
 async function refresh() {
-  setStatus('Loading pictures...');
+  countEl.textContent = 'Loading…';
   try {
     photos = await listFolder();
     renderGrid();
   } catch (e) {
-    setStatus('Error: ' + e.message);
+    countEl.textContent = 'Could not load pictures';
+    console.error(e);
   }
 }
 
-// ---- Thumbnails: loaded as cards scroll into view, a few at a time ----
+// ---- Thumbnails ----
 
 const queue = [];
 let activeJobs = 0;
 
-function enqueue(job) {
-  queue.push(job);
-  pump();
-}
-
+function enqueue(job) { queue.push(job); pump(); }
 function pump() {
   while (activeJobs < MAX_PARALLEL_THUMBS && queue.length) {
     const job = queue.shift();
@@ -274,17 +427,18 @@ function pump() {
   }
 }
 
-const thumbCache = new Map();
-function thumbUrl(p) {
-  if (!thumbCache.has(p.id)) {
-    const src = p.thumbnailLink
-      ? p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX
-      : `https://www.googleapis.com/drive/v3/files/${p.id}?alt=media`;
-    const pr = driFetch(src).then(r => r.blob()).then(b => URL.createObjectURL(b));
-    pr.catch(() => thumbCache.delete(p.id));
-    thumbCache.set(p.id, pr);
-  }
-  return thumbCache.get(p.id);
+// Loads a thumbnail with the access token. If that fails, uses the public link directly
+async function loadThumb(p, img) {
+  if (!p.thumbnailLink) { img.classList.add('ready'); return; }
+  const url = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
+  let src = url;
+  try {
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (res.ok) src = URL.createObjectURL(await res.blob());
+  } catch (e) {}
+  img.onload = () => img.classList.add('ready');
+  img.onerror = () => { img.classList.add('ready'); };
+  img.src = src;
 }
 
 const io = new IntersectionObserver(entries => {
@@ -293,7 +447,7 @@ const io = new IntersectionObserver(entries => {
     io.unobserve(en.target);
     const p = photos.find(x => x.id === en.target.dataset.id);
     if (!p) return;
-    enqueue(() => thumbUrl(p).then(url => { en.target.querySelector('img').src = url; }));
+    enqueue(() => loadThumb(p, en.target.querySelector('img')));
   });
 }, { rootMargin: '400px' });
 
@@ -301,18 +455,42 @@ function renderGrid() {
   io.disconnect();
   queue.length = 0;
   gallery.innerHTML = '';
+
+  if (!photos.length) {
+    gallery.innerHTML = '<div class="empty">No pictures found in this folder.</div>';
+    countEl.textContent = '0 pictures';
+    return;
+  }
+
   photos.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.dataset.id = p.id;
-    card.innerHTML = '<img alt=""><span></span>';
-    card.querySelector('span').textContent = p.name;
-    card.onclick = () => openImage(i);
+    card.style.animationDelay = Math.min(i, 30) * 25 + 'ms';
+    card.innerHTML = '<img alt=""><div class="cap"></div>';
+    card.querySelector('.cap').textContent = p.name;
+    card.onclick = () => openImage(indexOf(p.id));
     gallery.appendChild(card);
     io.observe(card);
   });
-  setStatus(photos.length + ' pictures');
+  applySearch();
 }
+
+function indexOf(id) { return photos.findIndex(p => p.id === id); }
+
+function applySearch() {
+  const q = searchEl.value.trim().toLowerCase();
+  let visible = 0;
+  gallery.querySelectorAll('.card').forEach(card => {
+    const name = (card.querySelector('.cap').textContent || '').toLowerCase();
+    const show = !q || name.includes(q);
+    card.hidden = !show;
+    if (show) visible++;
+  });
+  countEl.textContent = visible + (visible === 1 ? ' picture' : ' pictures');
+}
+
+searchEl.addEventListener('input', applySearch);
 
 // ---- Full-size pictures ----
 
@@ -331,43 +509,6 @@ function fullUrl(id) {
   }
   return fullCache.get(id);
 }
-
-// ---- Upload to the Drive folder ----
-
-function buildMultipart(meta, file) {
-  const boundary = 'gallery' + Date.now();
-  return new Blob([
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
-    `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
-    file,
-    `\r\n--${boundary}--`
-  ], { type: 'multipart/related; boundary=' + boundary });
-}
-
-$('uploadBtn').onclick = async () => {
-  const files = [...$('fileInput').files];
-  if (!files.length) { setStatus('Choose pictures first'); return; }
-  if (!accessToken) { setStatus('Click Connect Drive first'); return; }
-
-  let done = 0;
-  for (const f of files) {
-    setStatus('Uploading ' + f.name + ' (' + (done + 1) + ' of ' + files.length + ')');
-    try {
-      await driFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-        method: 'POST',
-        headers: { 'Content-Type': 'multipart/related' },
-        body: buildMultipart({ name: f.name, parents: [FOLDER_ID] }, f)
-      });
-      done++;
-    } catch (e) {
-      setStatus('Failed: ' + f.name + ' (' + e.message + ')');
-      await new Promise(r => setTimeout(r, 1500));
-    }
-  }
-  $('fileInput').value = '';
-  setStatus('Uploaded ' + done + ' of ' + files.length + ', refreshing...');
-  await refresh();
-};
 
 // ---- Zoom and pan ----
 
@@ -453,8 +594,9 @@ async function openImage(index) {
 
   viewer.classList.add('show');
   viewerImg.classList.add('loading');
+  viewerImg.removeAttribute('src');
   resetZoom();
-  counterEl.textContent = (index + 1) + ' / ' + total + '  ·  ' + p.name;
+  counterEl.textContent = (index + 1) + ' / ' + total + '   ·   ' + p.name;
   prevBtn.disabled = nextBtn.disabled = total < 2;
 
   try {
@@ -463,7 +605,7 @@ async function openImage(index) {
     viewerImg.src = url;
   } catch (e) {
     if (token !== viewToken) return;
-    counterEl.textContent = 'Could not open ' + p.name + ' (' + e.message + ')';
+    counterEl.textContent = 'Could not open ' + p.name;
   } finally {
     if (token === viewToken) viewerImg.classList.remove('loading');
   }
@@ -502,6 +644,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === '0') resetZoom();
 });
 
+// Touch: swipe to change pictures at normal zoom, one finger drags when zoomed
 let touchStartX = null, touchStartY = null, touchPanStartX = 0, touchPanStartY = 0;
 
 stage.addEventListener('touchstart', e => {
