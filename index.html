@@ -206,6 +206,7 @@
     <p>Sign in with an approved Google account to view the pictures.</p>
     <button id="loginBtn" class="btn btn-google"><span class="gdot"></span>Sign in with Google</button>
     <div id="loginMsg"></div>
+    <a id="openChrome" class="btn" href="#" hidden style="margin-top:12px;text-decoration:none">Open in Chrome</a>
   </div>
 </section>
 
@@ -751,7 +752,18 @@ stage.addEventListener('touchend', e => {
   touchStartX = null;
   if (zoom <= 1 && Math.abs(dx) > 50) dx < 0 ? showNext() : showPrev();
 });
-
+// On iPhone Safari, offer a button that opens this page in Chrome
+(function () {
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const isSafari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  if (isSafari) {
+    const a = $('openChrome');
+    a.href = 'googlechromes://' + location.host + location.pathname + location.search + location.hash;
+    a.hidden = false;
+  }
+})();
+  
 initGoogle();
 </script>
 </body>
