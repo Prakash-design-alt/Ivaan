@@ -153,7 +153,7 @@
   }
   .card:hover .cap { opacity: 1; transform: none; }
 
-  /* ---------- Video grid (wide cards, distinct from photos) ---------- */
+  /* ---------- Video grid (wide cards) ---------- */
   .vgrid {
     display: grid; gap: 16px; padding: 0 22px 20px;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -195,8 +195,7 @@
     background: rgba(0, 0, 0, .65); font-variant-numeric: tabular-nums;
   }
 
-  .empty { text-align: center; color: var(--muted); padding: 60px 22px; }
-  .none { color: var(--muted); font-size: 14px; padding: 0 22px 24px; }
+  .status { text-align: center; color: var(--muted); padding: 60px 22px; font-size: 14px; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
   @keyframes shimmer { from { background-position: 150% 0; } to { background-position: -150% 0; } }
@@ -246,7 +245,7 @@
   #zoomBar button:hover { background: rgba(255, 255, 255, .12); }
   #zoomLabel { font-size: 13px; color: #cbd5e1; min-width: 50px; text-align: center; }
 
-  /* ---------- Video player panel (separate design) ---------- */
+  /* ---------- Video player panel ---------- */
   #videoViewer {
     position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center;
     padding: 20px; background: rgba(0, 0, 0, .9); backdrop-filter: blur(14px); animation: fade .25s both;
@@ -269,9 +268,7 @@
   .vv-btn:hover { background: rgba(255, 255, 255, .16); }
   .vv-btn:disabled { opacity: .3; cursor: default; }
   .vv-video { display: block; width: 100%; max-height: 72vh; background: #000; }
-  .vv-foot {
-    display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px;
-  }
+  .vv-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; }
   .vv-status { font-size: 13px; color: var(--muted); }
   .vv-nav { display: flex; gap: 8px; }
 
@@ -315,8 +312,7 @@
       </div>
     </div>
     <div class="tabs" role="tablist">
-      <button data-f="all" class="on">All</button>
-      <button data-f="photos">Photos</button>
+      <button data-f="photos" class="on">Photos</button>
       <button data-f="videos">Videos</button>
     </div>
     <input id="search" class="search" type="search" placeholder="Search" autocomplete="off">
@@ -324,17 +320,17 @@
   </header>
 
   <main>
+    <div id="empty" class="status" hidden></div>
+
     <section id="photosSection">
       <div class="sec"><h2>Photos</h2><span class="n" id="photoCount"></span><span class="line"></span></div>
       <div id="photoGrid" class="grid"></div>
     </section>
 
-    <section id="videosSection">
+    <section id="videosSection" hidden>
       <div class="sec"><h2>Videos</h2><span class="n" id="videoCount"></span><span class="line"></span></div>
       <div id="videoGrid" class="vgrid"></div>
     </section>
-
-    <div id="empty" class="empty" hidden>No pictures or videos found in this folder.</div>
   </main>
 
   <!-- Photo viewer -->
@@ -396,24 +392,31 @@ const MIN_ZOOM = 1, MAX_ZOOM = 5, ZOOM_STEP = 0.25;
 const $ = id => document.getElementById(id);
 const loginEl = $('login'), appEl = $('app'), loginBtn = $('loginBtn'), loginMsg = $('loginMsg');
 const userEl = $('user'), avatarEl = $('avatar'), unameEl = $('uname'), uemailEl = $('uemail');
-const countEl = $('count');
 const searchEl = $('search');
 const photosSection = $('photosSection'), videosSection = $('videosSection');
 const photoGrid = $('photoGrid'), videoGrid = $('videoGrid'), emptyEl = $('empty');
 const photoCountEl = $('photoCount'), videoCountEl = $('videoCount');
 
-// Photo viewer
 const viewer = $('viewer'), stage = $('stage'), viewerImg = $('viewerImg');
 const counterEl = $('counter'), prevBtn = $('prevBtn'), nextBtn = $('nextBtn'), zoomLabel = $('zoomLabel');
 
-// Video viewer
 const videoViewer = $('videoViewer'), vvVideo = $('vvVideo'), vvTitle = $('vvTitle');
 const vvCount = $('vvCount'), vvStatus = $('vvStatus'), vvPrev = $('vvPrev'), vvNext = $('vvNext');
 
 const isVideo = p => (p.mimeType || '').startsWith('video/');
 const wrap = (i, total) => ((i % total) + total) % total;
 
-// ---- Screens ----
+// ---- State ----
+
+let tokenClient = null, accessToken = null, tokenExpiresAt = 0;
+let pendingResolve = null, pendingReject = null;
+let session = null, refreshTimer = null;
+let photos = [], picList = [], vidList = [], byId = new Map();
+let currentIndex = -1, viewToken = 0;
+let vIndex = -1, vToken = 0, vidObjUrl = null;
+let filter = 'photos';
+
+// ---- Screens and status ----
 
 function showLogin(msg = '') {
   appEl.hidden = true;
@@ -424,6 +427,11 @@ function showLogin(msg = '') {
 function showApp() {
   loginEl.hidden = true;
   appEl.hidden = false;
+}
+
+function setStatus(text) {
+  emptyEl.textContent = text;
+  emptyEl.hidden = !text;
 }
 
 function renderUser() {
@@ -443,16 +451,7 @@ function renderUser() {
   }
 }
 
-// ---- Google sign-in (Google Identity Services) ----
-
-let tokenClient = null, accessToken = null, tokenExpiresAt = 0;
-let pendingResolve = null, pendingReject = null;
-let session = null;
-let refreshTimer = null;
-let photos = [], picList = [], vidList = [], byId = new Map();
-let currentIndex = -1, viewToken = 0;
-let vIndex = -1, vToken = 0, vidObjUrl = null;
-let filter = 'all';
+// ---- Google sign-in ----
 
 function onTokenResponse(resp) {
   if (!pendingResolve) return;
@@ -524,7 +523,7 @@ function startApp() {
     session = saved;
     renderUser();
     showApp();
-    setCount('Connecting…');
+    setStatus('Connecting…');
   }
   connect('')
     .then(() => { showApp(); refresh(); })
@@ -575,7 +574,7 @@ $('signOutBtn').onclick = () => {
   localStorage.removeItem(SESSION_KEY);
   photos = []; picList = []; vidList = []; byId = new Map();
   photoGrid.innerHTML = ''; videoGrid.innerHTML = '';
-  setCount('');
+  photoCountEl.textContent = ''; videoCountEl.textContent = '';
   renderUser();
   showLogin('Signed out.');
 };
@@ -620,20 +619,18 @@ async function listFolder() {
   return files;
 }
 
-function setCount(text) { countEl.textContent = text; }
-
 async function refresh() {
-  setCount('Loading…');
+  setStatus('Loading pictures…');
   try {
     photos = await listFolder();
     renderGrids();
   } catch (e) {
-    setCount('Could not load');
     console.error(e);
+    setStatus('Could not load pictures. ' + e.message);
   }
 }
 
-// ---- Thumbnails (shared by both grids) ----
+// ---- Thumbnails ----
 
 const queue = [];
 let activeJobs = 0;
@@ -648,14 +645,14 @@ function pump() {
 }
 
 async function loadThumb(p, img, card) {
-  if (!p.thumbnailLink) { img.classList.add('ready'); card.classList.add('ready'); return; }
+  const done = () => { img.classList.add('ready'); card.classList.add('ready'); };
+  if (!p.thumbnailLink) { done(); return; }
   const url = p.thumbnailLink.replace(/=s\d+$/, '') + '=s' + THUMB_PX;
   let src = url;
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
     if (res.ok) src = URL.createObjectURL(await res.blob());
   } catch (e) {}
-  const done = () => { img.classList.add('ready'); card.classList.add('ready'); };
   img.onload = done;
   img.onerror = done;
   img.src = src;
@@ -720,9 +717,7 @@ function renderGrids() {
     io.observe(card);
   });
 
-  emptyEl.hidden = photos.length > 0;
-  photoCountEl.textContent = picList.length;
-  videoCountEl.textContent = vidList.length;
+  setStatus(photos.length ? '' : 'No pictures or videos found in this folder.');
   applyFilters();
 }
 
@@ -743,11 +738,10 @@ function applyFilters() {
     if (show) vv++;
   });
 
-  photosSection.hidden = filter === 'videos';
-  videosSection.hidden = filter === 'photos';
-
-  const shown = (filter !== 'videos' ? pv : 0) + (filter !== 'photos' ? vv : 0);
-  setCount(shown + (shown === 1 ? ' item' : ' items'));
+  photosSection.hidden = filter !== 'photos';
+  videosSection.hidden = filter !== 'videos';
+  photoCountEl.textContent = pv ? pv + (pv === 1 ? ' item' : ' items') : '';
+  videoCountEl.textContent = vv ? vv + (vv === 1 ? ' item' : ' items') : '';
 }
 
 searchEl.addEventListener('input', applyFilters);
@@ -900,7 +894,6 @@ prevBtn.onclick = e => { e.stopPropagation(); showPrevPhoto(); };
 nextBtn.onclick = e => { e.stopPropagation(); showNextPhoto(); };
 viewer.onclick = e => { if (e.target === viewer || e.target === stage) closePhoto(); };
 
-// Photo swipe (normal zoom only)
 let touchStartX = null, touchStartY = null, touchPanStartX = 0, touchPanStartY = 0;
 
 stage.addEventListener('touchstart', e => {
@@ -927,7 +920,6 @@ stage.addEventListener('touchend', e => {
 
 // ---- Video player ----
 
-// The video is downloaded with the permission header, then played from a local copy
 function stopVideo() {
   vvVideo.pause();
   if (vidObjUrl) { URL.revokeObjectURL(vidObjUrl); vidObjUrl = null; }
